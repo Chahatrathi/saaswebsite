@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ELITE | Official Store</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <style>
+        :root { --bg: #000; --accent: #fff; --grey: #111; --green: #00ff88; --red: #ff4444; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: var(--bg); color: #fff; font-family: 'Helvetica Neue', Arial; overflow-x: hidden; }
+
+        /* --- NAVIGATION --- */
+        nav { position: fixed; top: 0; width: 100%; display: flex; justify-content: space-between; padding: 20px 40px; z-index: 1000; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); }
+        .logo { font-weight: 900; letter-spacing: 8px; cursor: pointer; font-size: 20px; }
+        .nav-links { display: flex; gap: 15px; font-size: 9px; letter-spacing: 2px; align-items: center; }
+        .nav-links a { cursor: pointer; opacity: 0.6; text-transform: uppercase; color: #fff; text-decoration: none; }
+        
+        /* --- PAGE SYSTEM --- */
+        .page { display: none; min-height: 100vh; width: 100%; padding: 100px 30px; }
+        .page.active { display: block; }
+
+        #hero-canvas { position: fixed; inset: 0; z-index: -1; filter: brightness(0.4); }
+        
+        /* --- MARQUEE --- */
+        .marquee-content { display: flex; width: 200%; animation: scroll 25s linear infinite; }
+        @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        .card { flex: 0 0 280px; height: 400px; margin: 0 10px; background: #111; padding: 20px; display: flex; flex-direction: column; justify-content: flex-end; border: 1px solid #222; }
+
+        /* --- FEED GRID --- */
+        .feed-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+        .feed-card { aspect-ratio: 1/1; background: #0a0a0a; border: 1px solid #1a1a1a; }
+
+        /* --- AUTH OVERLAY --- */
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 5000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(20px); }
+        .glass-box { background: #0a0a0a; padding: 30px; border-radius: 10px; width: 90%; max-width: 400px; border: 1px solid #222; text-align: center; }
+        input { width: 100%; padding: 12px; margin-bottom: 10px; background: #000; border: 1px solid #222; color: #fff; outline: none; }
+        .btn-prime { width: 100%; padding: 14px; background: #fff; color: #000; border: none; font-weight: 900; cursor: pointer; }
+        
+        /* --- UTILS --- */
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); display: inline-block; margin-left: 5px; }
+        .online { background: var(--green) !important; box-shadow: 0 0 8px var(--green); }
+        #toast { position: fixed; bottom: 20px; right: 20px; background: #fff; color: #000; padding: 10px 20px; font-weight: 900; display: none; z-index: 6000; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+    <div id="toast">MESSAGE</div>
+
+    <nav>
+        <div class="logo" onclick="showPage('home-page')">ELITE</div>
+        <div class="nav-links">
+            <a onclick="showPage('home-page')">Home</a>
+            <a onclick="showPage('feed-page')">Feed</a>
+            <a onclick="showPage('contact-page')">Contact</a>
+            <a id="profile-btn" onclick="showPage('profile-page')" style="display:none;">Profile</a>
+            <a id="auth-trigger" onclick="openAuth('LOGIN')">Account<span id="status-dot" class="status-dot"></span></a>
+        </div>
+    </nav>
+
+    <canvas id="hero-canvas"></canvas>
+
+    <div id="home-page" class="page active" style="padding:0; display:flex; flex-direction:column; justify-content:center;">
+        <div style="height:70vh; display:flex; align-items:center; justify-content:center;">
+            <h1 style="font-size:18vw; font-weight:900; letter-spacing:-5px;">ELITE</h1>
+        </div>
+        <div class="marquee-content">
+            <div class="card" onclick="this.classList.toggle('active')"><h3>TEE</h3><p>$85</p></div>
+            <div class="card"><h3>HOODIE</h3><p>$120</p></div>
+            <div class="card"><h3>CARGO</h3><p>$180</p></div>
+            <div class="card"><h3>TEE</h3><p>$85</p></div>
+        </div>
+    </div>
+
+    <div id="feed-page" class="page">
+        <h2 style="margin-bottom:30px; text-align:center; letter-spacing:5px;">FEED</h2>
+        <div class="feed-grid">
+            <div class="feed-card"></div><div class="feed-card"></div><div class="feed-card"></div>
+            <div class="feed-card"></div><div class="feed-card"></div><div class="feed-card"></div>
+        </div>
+    </div>
+
+    <div id="contact-page" class="page">
+        <h1>CONTACT</h1>
+        <input type="text" placeholder="NAME">
+        <textarea style="width:100%; background:#000; color:#fff; padding:10px; border:1px solid #222;" rows="4" placeholder="MESSAGE"></textarea>
+        <button class="btn-prime" style="margin-top:10px;" onclick="showToast('SENT')">SEND</button>
+    </div>
+
+    <div id="profile-page" class="page">
+        <h2>PROFILE</h2>
+        <input type="text" id="p-name">
+        <button class="btn-prime" onclick="updateProfile()">SAVE</button>
+    </div>
+
+    <div id="auth-overlay" class="overlay">
+        <div class="glass-box">
+            <h2 id="auth-title">LOGIN</h2>
+            <div id="auth-form-fields"></div>
+            <button class="btn-prime" onclick="submitAuth()">PROCEED</button>
+            <p onclick="switchAuthMode()" style="font-size:10px; margin-top:10px; opacity:0.5; cursor:pointer;">SWITCH MODE</p>
+        </div>
+    </div>
+
+    <script>
+        // --- VERCEL CLOUD CONFIGURATION ---
+        // 1. First, deploy your backend (server.js) to Render.com
+        // 2. Paste the live URL Render gives you below:
+        const CLOUD_SERVER_URL = "https://your-render-app-name.onrender.com"; 
+        const API_BASE = `${CLOUD_SERVER_URL}/api`;
+
+        let loggedUser = null;
+
+        function showPage(id) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function openAuth(mode) {
+            document.getElementById('auth-overlay').style.display = 'flex';
+            document.getElementById('auth-title').innerText = mode;
+            const fields = document.getElementById('auth-form-fields');
+            if(mode === 'SIGNUP') {
+                fields.innerHTML = `<input id="a-name" placeholder="NAME"><input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASSWORD">`;
+            } else {
+                fields.innerHTML = `<input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASSWORD">`;
+            }
+        }
+
+        function switchAuthMode() { openAuth(document.getElementById('auth-title').innerText === 'LOGIN' ? 'SIGNUP' : 'LOGIN'); }
+
+        async function submitAuth() {
+            const email = document.getElementById('a-email').value;
+            const pass = document.getElementById('a-pass').value;
+            const name = document.getElementById('a-name')?.value;
+            const mode = document.getElementById('auth-title').innerText.toLowerCase();
+
+            try {
+                const res = await fetch(`${API_BASE}/${mode}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ email, password: pass, fullName: name })
+                });
+                const data = await res.json();
+                if(res.ok) {
+                    loggedUser = { ...data.user, email };
+                    document.getElementById('auth-overlay').style.display = 'none';
+                    document.getElementById('auth-trigger').innerText = loggedUser.name;
+                    document.getElementById('profile-btn').style.display = 'block';
+                    showToast("WELCOME");
+                }
+            } catch(e) { 
+                console.error("Auth Error:", e);
+                alert("Server Unreachable. Ensure your Render backend is live."); 
+            }
+        }
+
+        const canvas = document.getElementById("hero-canvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+        const images = [];
+        for(let i=1; i<=50; i++) { 
+            const img = new Image(); 
+            img.src = `frames/${i.toString().padStart(2, '0')}.jpg`; 
+            images.push(img); 
+        }
+        let idx = 0;
+        function anim() { 
+            ctx.clearRect(0,0,canvas.width,canvas.height); 
+            if(images[Math.floor(idx%50)]) ctx.drawImage(images[Math.floor(idx%50)], 0, 0, canvas.width, canvas.height); 
+            idx += 0.1; requestAnimationFrame(anim); 
+        }
+        images[0].onload = anim;
+
+        function showToast(m) { 
+            const t = document.getElementById('toast'); 
+            t.innerText = m; 
+            t.style.display = "block"; 
+            setTimeout(() => t.style.display = "none", 3000); 
+        }
+
+        async function check() {
+            try { 
+                const res = await fetch(`${API_BASE}/status`); 
+                if(res.ok) document.getElementById('status-dot').classList.add('online'); 
+            } catch(e) { console.log("Wake up signal sent to Render..."); }
+        }
+        setInterval(check, 10000); check();
+    </script>
+</body>
+</html>
