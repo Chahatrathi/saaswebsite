@@ -1,8 +1,12 @@
 {
     "version": 2,
+    "public": true,
     "cleanUrls": true,
+    "builds": [
+      { "src": "index.html", "use": "@vercel/static" },
+      { "src": "frames/**", "use": "@vercel/static" }
+    ],
     "rewrites": [
-      { "source": "/api/(.*)", "destination": "/api/index.js" },
       { "source": "/(.*)", "destination": "/index.html" }
     ]
   }
