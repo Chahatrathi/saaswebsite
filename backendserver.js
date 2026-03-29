@@ -40,10 +40,7 @@ cloudinary.config({
 
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
-    params: { 
-        folder: 'elite_products', 
-        allowed_formats: ['jpg', 'png', 'jpeg'] 
-    },
+    params: { folder: 'elite_products', allowed_formats: ['jpg', 'png', 'jpeg'] },
 });
 const upload = multer({ storage: storage });
 
@@ -78,32 +75,37 @@ const Query = mongoose.model('Query', new mongoose.Schema({
 
 app.get('/api/status', (req, res) => res.json({ status: "online" }));
 
-// 1. Signup with Verification
+// 1. SIGNUP: Sends Branded Verification Email
 app.post('/api/signup', async (req, res) => {
     try {
         const { fullName, email, password } = req.body;
         const hashedPassword = await bcrypt.hash(password, 10);
         const role = (email.toLowerCase() === MASTER_ADMIN) ? 'admin' : 'customer';
         
-        const user = new User({ fullName, email: email.toLowerCase(), password: hashedPassword, role });
+        const user = new User({ fullName, email: email.toLowerCase(), password: hashedPassword, role, isVerified: false });
         await user.save();
 
         const verifyLink = `${req.headers.origin}/verify?email=${email.toLowerCase()}`;
-        await transporter.sendMail({
-            from: `ELITE STORE <${process.env.EMAIL_USER}>`,
-            to: email,
+        
+        const mailOptions = {
+            from: `"ELITE STORE" <${process.env.EMAIL_USER}>`,
+            to: email.toLowerCase(),
             subject: 'Verify your ELITE Account',
-            html: `<div style="font-family:Arial; text-align:center; padding:20px;">
-                    <h2>Welcome to ELITE!</h2>
-                    <p>Click the button below to verify your email:</p>
-                    <a href="${verifyLink}" style="padding:10px 20px; background:#00ff88; color:#000; text-decoration:none; font-weight:bold; border-radius:5px;">VERIFY NOW</a>
-                   </div>`
-        });
-        res.status(201).json({ message: "Verification email sent!" });
-    } catch (e) { res.status(400).json({ error: "Signup Failed" }); }
+            html: `
+                <div style="background:#000; color:#fff; padding:40px; font-family:Arial; text-align:center; border:1px solid #00ff88;">
+                    <h1 style="letter-spacing:10px;">ELITE</h1>
+                    <p>Welcome to the community, ${fullName}.</p>
+                    <p>Please verify your email to start shopping:</p>
+                    <a href="${verifyLink}" style="background:#00ff88; color:#000; padding:15px 30px; text-decoration:none; font-weight:bold; display:inline-block; margin-top:20px;">VERIFY EMAIL</a>
+                </div>`
+        };
+
+        transporter.sendMail(mailOptions);
+        res.status(201).json({ message: "Verification email sent! Check your inbox." });
+    } catch (e) { res.status(400).json({ error: "Signup Failed - Email might already exist" }); }
 });
 
-// 2. Resend Verification
+// 2. RESEND VERIFICATION
 app.post('/api/resend-verification', async (req, res) => {
     try {
         const { email } = req.body;
@@ -113,8 +115,8 @@ app.post('/api/resend-verification', async (req, res) => {
 
         const verifyLink = `${req.headers.origin}/verify?email=${email.toLowerCase()}`;
         await transporter.sendMail({
-            from: `ELITE STORE <${process.env.EMAIL_USER}>`,
-            to: email,
+            from: `"ELITE STORE" <${process.env.EMAIL_USER}>`,
+            to: email.toLowerCase(),
             subject: 'Verify your ELITE Account',
             html: `<p>New verification link:</p><a href="${verifyLink}">VERIFY EMAIL</a>`
         });
@@ -122,7 +124,7 @@ app.post('/api/resend-verification', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Failed to resend" }); }
 });
 
-// 3. Login & Verification Link Check
+// 3. LOGIN
 app.post('/api/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -141,64 +143,42 @@ app.post('/api/verify-email', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Verification Failed" }); }
 });
 
-// 4. Products & Admin Management
+// 4. ADMIN & PRODUCTS
 app.get('/api/products', async (req, res) => {
-    try {
-        const products = await Product.find();
-        res.json(products);
-    } catch (e) { res.status(500).json({ error: "Fetch failed" }); }
+    const products = await Product.find();
+    res.json(products);
 });
 
 app.post('/api/admin/products', upload.single('image'), async (req, res) => {
-    try {
-        const newProduct = new Product({ 
-            name: req.body.name, 
-            price: req.body.price, 
-            image: req.file.path 
-        });
-        await newProduct.save();
-        res.status(201).json(newProduct);
-    } catch (e) { res.status(500).json({ error: "Upload Failed" }); }
+    const newProduct = new Product({ name: req.body.name, price: req.body.price, image: req.file.path });
+    await newProduct.save();
+    res.status(201).json(newProduct);
 });
 
 app.get('/api/admin/stats', async (req, res) => {
-    try {
-        const queries = await Query.find().sort({ date: -1 });
-        const orders = await Order.find();
-        const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
-        res.json({ queries, totalRevenue });
-    } catch (e) { res.status(500).json({ error: "Stats failed" }); }
+    const queries = await Query.find().sort({ date: -1 });
+    const orders = await Order.find();
+    const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
+    res.json({ queries, totalRevenue });
 });
 
 app.delete('/api/admin/queries/:id', async (req, res) => {
-    try {
-        await Query.findByIdAndDelete(req.params.id);
-        res.json({ message: "Deleted" });
-    } catch (e) { res.status(500).json({ error: "Delete failed" }); }
+    await Query.findByIdAndDelete(req.params.id);
+    res.json({ message: "Deleted" });
 });
 
-// 5. Contact & Payments
 app.post('/api/contact', async (req, res) => {
-    try {
-        const { name, email, message } = req.body;
-        const newQuery = new Query({ name, email, message });
-        await newQuery.save();
-
-        // Optional Admin Alert
-        await transporter.sendMail({
-            from: process.env.EMAIL_USER,
-            to: MASTER_ADMIN,
-            subject: `🔥 NEW QUERY: ${name}`,
-            text: `Message: ${message}\nFrom: ${email}`
-        });
-
-        res.status(201).json({ message: "Sent" });
-    } catch (e) { res.status(500).json({ error: "Failed" }); }
+    const { name, email, message } = req.body;
+    await new Query({ name, email, message }).save();
+    res.status(201).json({ message: "Sent" });
 });
 
+// 5. PAYMENTS: Sends Branded Order Confirmation
 app.post('/api/create-checkout-session', async (req, res) => {
     try {
         const { items, userEmail } = req.body;
+        const totalAmount = items.reduce((sum, i) => sum + (i.price * (i.quantity || 1)), 0);
+        
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             line_items: items.map(i => ({
@@ -215,8 +195,25 @@ app.post('/api/create-checkout-session', async (req, res) => {
             cancel_url: `${req.headers.origin}/?payment=cancel`,
         });
 
-        // Save order as pending/initiate
-        await new Order({ userEmail: userEmail.toLowerCase(), items, total: items.reduce((s,i)=>s+i.price, 0) }).save();
+        await new Order({ userEmail: userEmail.toLowerCase(), items, total: totalAmount }).save();
+
+        const orderSummary = items.map(i => `- ${i.name}`).join('<br>');
+        const mailOptions = {
+            from: `"ELITE STORE" <${process.env.EMAIL_USER}>`,
+            to: userEmail,
+            subject: 'Order Confirmed - ELITE Gear',
+            html: `
+                <div style="font-family:Arial; padding:20px; border:1px solid #eee;">
+                    <h2 style="color:#00ff88;">Thank you for your purchase!</h2>
+                    <p>Your order is being processed and will be shipped soon.</p>
+                    <hr>
+                    <p><b>Items:</b><br>${orderSummary}</p>
+                    <p><b>Total Amount:</b> ₹${totalAmount}</p>
+                    <hr>
+                    <p>Stay Elite.</p>
+                </div>`
+        };
+        transporter.sendMail(mailOptions);
 
         res.json({ id: session.id });
     } catch (e) { res.status(500).json({ error: e.message }); }
