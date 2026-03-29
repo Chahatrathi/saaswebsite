@@ -84,7 +84,7 @@ app.post('/api/signup', async (req, res) => {
         const user = new User({ fullName, email: email.toLowerCase(), password: hashedPassword, role, isVerified: false });
         await user.save();
 
-        const verifyLink = `${req.headers.origin}/verify?email=${email.toLowerCase()}`;
+        const verifyLink = `${process.env.FRONTEND_URL || req.headers.origin}/verify?email=${email.toLowerCase()}`;
         
         const mailOptions = {
             from: `"ELITE STORE" <${process.env.EMAIL_USER}>`,
