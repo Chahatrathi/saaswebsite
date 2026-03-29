@@ -3,88 +3,125 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ELITE | Official Store</title>
+    <title>ELITE | Official Store India</title>
+    <script src="https://js.stripe.com/v3/"></script>
     <style>
         :root { --bg: #000; --accent: #fff; --green: #00ff88; --red: #ff4444; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { background: var(--bg); color: #fff; font-family: 'Helvetica Neue', Arial; overflow-x: hidden; }
 
-        nav { position: fixed; top: 0; width: 100%; display: flex; justify-content: space-between; padding: 25px 40px; z-index: 1000; background: rgba(0,0,0,0.6); backdrop-filter: blur(10px); }
-        .logo { font-weight: 900; letter-spacing: 8px; cursor: pointer; }
+        nav { position: fixed; top: 0; width: 100%; display: flex; justify-content: space-between; padding: 25px 40px; z-index: 1000; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); }
         .nav-links { display: flex; gap: 20px; font-size: 10px; letter-spacing: 2px; align-items: center; }
-        .nav-links a { cursor: pointer; color: #fff; text-decoration: none; text-transform: uppercase; opacity: 0.8; }
+        .nav-links a { cursor: pointer; text-decoration: none; text-transform: uppercase; color: #fff; opacity: 0.8; }
         
         .page { display: none; min-height: 100vh; padding: 120px 30px; position: relative; z-index: 10; }
         .page.active { display: block; }
 
-        #hero-canvas { position: fixed; inset: 0; z-index: 1; filter: brightness(0.4); pointer-events: none; transition: opacity 0.5s; }
-
-        .btn-prime { width: 100%; padding: 15px; background: #fff; color: #000; border: none; font-weight: 900; cursor: pointer; font-size: 10px; margin-top: 10px; text-transform: uppercase; }
-        .btn-delete { background: var(--red); color: white; margin-top: 5px; }
-
-        input, textarea { width: 100%; padding: 15px; margin-bottom: 10px; background: rgba(255,255,255,0.05); border: 1px solid #333; color: #fff; outline: none; }
-        #toast { position: fixed; bottom: 30px; right: 30px; background: #fff; color: #000; padding: 15px 30px; display: none; z-index: 9999; font-weight: bold; font-size: 10px; }
+        #hero-canvas { position: fixed; inset: 0; z-index: 1; filter: brightness(0.4); pointer-events: none; }
         
+        .clothes-ticker { width: 100%; overflow: hidden; position: fixed; bottom: 0; z-index: 50; padding: 20px 0; background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.8) 100%); }
+        .ticker-track { display: flex; animation: scroll 30s linear infinite; }
+        .clothes-ticker img { width: 150px; height: 150px; object-fit: cover; border: 1px solid rgba(255,255,255,0.1); margin-right: 50px; }
+        @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        
+        #cart-sidebar { position: fixed; right: -400px; top: 0; width: 350px; height: 100vh; background: #0a0a0a; border-left: 1px solid #222; z-index: 2000; padding: 40px 20px; transition: 0.5s; overflow-y: auto; }
+        #cart-sidebar.open { right: 0; }
+        
+        .btn-prime { width: 100%; padding: 15px; background: #fff; color: #000; border: none; font-weight: 900; cursor: pointer; font-size: 10px; margin-top: 10px; }
+        input, select, textarea { width: 100%; padding: 15px; margin-bottom: 10px; background: rgba(255,255,255,0.05); border: 1px solid #333; color: #fff; outline: none; }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); display: inline-block; margin-left: 5px; }
         .online { background: var(--green) !important; box-shadow: 0 0 10px var(--green); }
+        #toast { position: fixed; bottom: 30px; right: 30px; background: #fff; color: #000; padding: 15px 30px; display: none; z-index: 9999; font-weight: bold; font-size: 10px; }
         
-        #logout-btn { display: none; color: var(--red) !important; }
+        .stat-card { background: #111; border: 1px solid var(--green); padding: 20px; margin-bottom: 20px; text-align: center; border-radius: 5px; }
+        .query-item { background: #0a0a0a; border-bottom: 1px solid #222; padding: 10px; font-size: 11px; margin-bottom: 10px; text-align: left;}
+        #logout-link { color: var(--red) !important; display: none; }
     </style>
 </head>
 <body>
 
     <div id="toast">MESSAGE</div>
 
+    <div id="cart-sidebar">
+        <h2 style="letter-spacing:5px; margin-bottom:30px;">CART</h2>
+        <div id="cart-items"></div>
+        <div id="cart-total" style="border-top:1px solid #222; padding-top:20px; font-weight:bold; margin-top: 20px;">TOTAL: ₹0</div>
+        <button class="btn-prime" onclick="checkoutCart()">CHECKOUT VIA STRIPE</button>
+        <button onclick="toggleCart()" style="background:none; border:none; color:#555; margin-top:20px; cursor:pointer; width:100%;">CLOSE</button>
+    </div>
+
     <nav>
         <div class="logo" onclick="showPage('home-page')">ELITE</div>
         <div class="nav-links">
             <a onclick="showPage('home-page')">Home</a>
             <a onclick="showPage('store-page'); loadProducts();">Store</a>
-            <a id="admin-link" onclick="showPage('admin-page'); loadAdminProducts();" style="display:none; color:var(--green);">Admin</a>
+            <a id="cart-link" onclick="toggleCart()">Cart (<span id="cart-count">0</span>)</a>
+            <a id="contact-link" onclick="showPage('contact-page')">Contact</a>
+            <a id="admin-link" onclick="showPage('admin-page'); loadAdminData();" style="display:none; color:var(--green);">Admin Panel</a>
             <a id="auth-trigger" onclick="openAuth('LOGIN')">Account<span id="status-dot" class="status-dot"></span></a>
-            <a id="logout-btn" onclick="logout()">Logout</a>
+            <a id="logout-link" onclick="logout()">Logout</a>
         </div>
     </nav>
 
     <canvas id="hero-canvas"></canvas>
 
     <div id="home-page" class="page active">
-        <div style="height:70vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+        <div style="height:70vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; z-index: 60;">
             <h1 style="font-size:15vw; font-weight:900; line-height:0.8;">ELITE</h1>
             <p style="letter-spacing:10px; margin-top:20px;">GYM-WEAR INDIA</p>
         </div>
+        <div class="clothes-ticker"><div id="ticker-track" class="ticker-track"></div></div>
     </div>
 
     <div id="store-page" class="page">
-        <h2 style="text-align:center; letter-spacing:5px;">LATEST DROPS</h2>
-        <div id="product-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:30px; margin-top:50px;"></div>
+        <div id="product-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:30px;"></div>
+    </div>
+
+    <div id="contact-page" class="page">
+        <div style="max-width:500px; margin: 0 auto; background: #0a0a0a; padding: 40px; border: 1px solid #222;">
+            <h2 style="text-align:center; margin-bottom:20px;">SUBMIT QUERY</h2>
+            <input type="text" id="q-name" placeholder="YOUR NAME">
+            <input type="email" id="q-email" placeholder="YOUR EMAIL">
+            <textarea id="q-message" rows="5" placeholder="MESSAGE"></textarea>
+            <button class="btn-prime" onclick="sendQuery()">SEND QUERY</button>
+        </div>
     </div>
 
     <div id="admin-page" class="page">
-        <div style="max-width:800px; margin:0 auto;">
-            <div style="background:#111; padding:40px; border:1px solid #333; margin-bottom:40px;">
-                <h3>ADD NEW PRODUCT</h3>
-                <input type="text" id="p-name" placeholder="PRODUCT NAME">
-                <input type="number" id="p-price" placeholder="PRICE (₹)">
-                <button class="btn-prime" onclick="addProduct()">PUBLISH</button>
+        <div class="stat-card">
+            <p style="font-size:10px; opacity:0.6;">TOTAL REVENUE</p>
+            <h1 id="revenue-display" style="color:var(--green); font-size:40px;">₹0</h1>
+        </div>
+        <div style="max-width:1000px; margin: 0 auto; display:grid; grid-template-columns: 1fr 1fr; gap:50px;">
+            <div>
+                <h3>ADD PRODUCT</h3>
+                <input type="text" id="p-name" placeholder="NAME">
+                <input type="number" id="p-price" placeholder="PRICE">
+                <input type="file" id="p-image" accept="image/*">
+                <button class="btn-prime" onclick="uploadProduct()">UPLOAD</button>
             </div>
-            <h3>INVENTORY</h3>
-            <div id="admin-product-list" style="margin-top:20px;"></div>
+            <div>
+                <h3>CUSTOMER QUERIES</h3>
+                <div id="admin-queries-list"></div>
+            </div>
         </div>
     </div>
 
     <div id="auth-overlay" style="position:fixed; inset:0; background:rgba(0,0,0,0.9); display:none; align-items:center; justify-content:center; z-index:5000;">
         <div style="background:#000; border:1px solid #333; padding:40px; width:350px; text-align:center;">
-            <h2 id="auth-title">LOGIN</h2><br>
+            <h2 id="auth-title">LOGIN</h2>
             <div id="auth-fields"></div>
             <button class="btn-prime" onclick="submitAuth()">CONTINUE</button>
-            <p onclick="toggleAuth()" style="font-size:10px; margin-top:20px; cursor:pointer; opacity:0.5;">OR SIGNUP</p>
+            <p onclick="toggleAuth()" style="font-size:10px; margin-top:20px; cursor:pointer;">SIGNUP</p>
         </div>
     </div>
 
     <script>
         const API_BASE = "https://elite-backend-1c3m.onrender.com/api";
+        const stripe = Stripe('pk_test_51TGFqzEvRNYv35zvMRUZZZ67MAw9wYzSSU7jcz8yRDSAhyXVYSr8lZ0sGXlJoMnj6PqrvBa3KiIvqHTIayDenHjd00ag4jevWd'); 
         let loggedUser = null;
+        let cart = [];
+        let allProducts = [];
 
         function showPage(id) {
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -92,151 +129,131 @@
             document.getElementById('hero-canvas').style.opacity = (id === 'home-page') ? '1' : '0.1';
         }
 
-        async function loadProducts() {
+        async function loadAdminData() {
             try {
-                const res = await fetch(`${API_BASE}/products`);
-                const products = await res.json();
-                document.getElementById('product-grid').innerHTML = products.map(p => `
-                    <div style="background:rgba(255,255,255,0.03); border:1px solid #222; padding:20px;">
-                        <h3>${p.name.toUpperCase()}</h3>
-                        <p style="color:var(--green); margin:10px 0;">₹${p.price}</p>
-                        <button class="btn-prime">ADD TO CART</button>
-                    </div>
-                `).join('');
-            } catch(e) { console.error("Store error:", e); }
+                const res = await fetch(`${API_BASE}/admin/stats`);
+                const data = await res.json();
+                document.getElementById('revenue-display').innerText = `₹${data.totalRevenue}`;
+                const queryList = document.getElementById('admin-queries-list');
+                queryList.innerHTML = data.queries?.length ? data.queries.map(q => `<div class="query-item"><b style="color:var(--green)">${q.name}</b> (${q.email})<br><p style="margin-top:5px; opacity:0.7">${q.message}</p></div>`).join('') : "<p>NO QUERIES</p>";
+            } catch(e) {}
         }
 
-        async function loadAdminProducts() {
-            try {
-                const res = await fetch(`${API_BASE}/products`);
-                const products = await res.json();
-                document.getElementById('admin-product-list').innerHTML = products.map(p => `
-                    <div style="display:flex; justify-content:space-between; align-items:center; background:#111; padding:15px; border-bottom:1px solid #222;">
-                        <span>${p.name} - ₹${p.price}</span>
-                        <button class="btn-prime btn-delete" style="width:100px;" onclick="deleteProduct('${p._id}')">DELETE</button>
-                    </div>
-                `).join('');
-            } catch(e) { console.error("Admin error:", e); }
-        }
-
-        async function addProduct() {
-            const name = document.getElementById('p-name').value;
-            const price = document.getElementById('p-price').value;
-            await fetch(`${API_BASE}/admin/products`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ name, price })
-            });
-            showToast("ADDED");
-            loadAdminProducts();
-        }
-
-        async function deleteProduct(id) {
-            await fetch(`${API_BASE}/admin/products/${id}`, { method: 'DELETE' });
-            showToast("DELETED");
-            loadAdminProducts();
-        }
-
-        // --- AUTH ---
-        function openAuth(m) {
-            document.getElementById('auth-overlay').style.display = 'flex';
-            document.getElementById('auth-title').innerText = m;
-            document.getElementById('auth-fields').innerHTML = m === 'SIGNUP' ? 
-                `<input id="a-name" placeholder="NAME"><input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASS">` :
-                `<input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASS">`;
-        }
-
-        function toggleAuth() {
-            const c = document.getElementById('auth-title').innerText;
-            openAuth(c === 'LOGIN' ? 'SIGNUP' : 'LOGIN');
+        async function sendQuery() {
+            const body = { name: document.getElementById('q-name').value, email: document.getElementById('q-email').value, message: document.getElementById('q-message').value };
+            const res = await fetch(`${API_BASE}/contact`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+            if(res.ok) { showToast("QUERY SENT"); document.getElementById('q-message').value = ""; }
         }
 
         async function submitAuth() {
             const mode = document.getElementById('auth-title').innerText.toLowerCase();
-            const email = document.getElementById('a-email').value;
-            const pass = document.getElementById('a-pass').value;
-            const name = document.getElementById('a-name')?.value;
-
-            try {
-                const res = await fetch(`${API_BASE}/${mode}`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ email, password: pass, fullName: name })
-                });
-                const data = await res.json();
-                if(res.ok) {
-                    loggedUser = data.user;
-                    updateUIForLogin();
-                    showToast("LOGGED IN");
-                } else { alert(data.error || "Login Error"); }
-            } catch(e) { alert("Server is waking up... Please wait 30 seconds."); }
-        }
-
-        function updateUIForLogin() {
-            document.getElementById('auth-overlay').style.display = 'none';
-            document.getElementById('auth-trigger').innerText = (loggedUser.fullName || loggedUser.name).toUpperCase();
-            document.getElementById('logout-btn').style.display = 'inline-block';
-            
-            if(loggedUser.role === 'admin' || loggedUser.email === "chahat.rathi1@gmail.com") {
-                document.getElementById('admin-link').style.display = 'inline-block';
-            } else {
-                document.getElementById('admin-link').style.display = 'none';
+            const res = await fetch(`${API_BASE}/${mode}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ email: document.getElementById('a-email').value, password: document.getElementById('a-pass').value, fullName: document.getElementById('a-name')?.value })
+            });
+            const data = await res.json();
+            if(res.ok) {
+                loggedUser = data.user;
+                document.getElementById('auth-overlay').style.display = 'none';
+                document.getElementById('auth-trigger').innerText = (loggedUser.name || loggedUser.fullName).toUpperCase();
+                document.getElementById('logout-link').style.display = 'block';
+                
+                const isAdmin = loggedUser.email === "chahat.rathi1@gmail.com";
+                document.getElementById('admin-link').style.display = isAdmin ? 'block' : 'none';
+                document.getElementById('cart-link').style.display = isAdmin ? 'none' : 'block';
+                document.getElementById('contact-link').style.display = 'block'; // Everyone can contact
+                loadProducts();
+                showToast("LOGGED IN");
             }
         }
 
         function logout() {
             loggedUser = null;
             document.getElementById('auth-trigger').innerText = "ACCOUNT";
-            document.getElementById('logout-btn').style.display = 'none';
+            document.getElementById('logout-link').style.display = 'none';
             document.getElementById('admin-link').style.display = 'none';
             showPage('home-page');
             showToast("LOGGED OUT");
         }
 
-        function showToast(m) {
-            const t = document.getElementById('toast'); t.innerText = m; t.style.display = "block";
-            setTimeout(() => t.style.display = "none", 3000);
+        function displayProducts(products) {
+            const isOwner = loggedUser && loggedUser.email === "chahat.rathi1@gmail.com";
+            document.getElementById('product-grid').innerHTML = products.map(p => `
+                <div style="background:#111; padding:20px; border:1px solid #222;">
+                    <img src="${p.image}" style="width:100%; height:250px; object-fit:cover;">
+                    <h3>${p.name.toUpperCase()}</h3>
+                    <p style="color:var(--green)">₹${p.price}</p>
+                    ${!isOwner ? `<button class="btn-prime" onclick="addToCart('${p._id}', '${p.name}', ${p.price}, '${p.image}')">ADD TO CART</button>` : `<p style="opacity:0.4; font-size:10px;">ADMIN VIEW</p>`}
+                </div>
+            `).join('');
         }
 
-        // --- CANVAS ANIMATION FOR GYM GIRL ---
+        async function loadProducts() {
+            const res = await fetch(`${API_BASE}/products`);
+            allProducts = await res.json();
+            displayProducts(allProducts);
+            const track = document.getElementById('ticker-track');
+            if(track) track.innerHTML = [...allProducts, ...allProducts].map(p => `<img src="${p.image}">`).join('');
+        }
+
+        function addToCart(id, name, price, image) {
+            cart.push({ id, name, price, image, quantity: 1 });
+            document.getElementById('cart-count').innerText = cart.length;
+            updateCartUI();
+            showToast("ADDED");
+        }
+
+        function updateCartUI() {
+            const list = document.getElementById('cart-items');
+            let total = cart.reduce((sum, item) => sum + item.price, 0);
+            list.innerHTML = cart.map(item => `<div style="font-size:10px; margin-bottom:10px;">${item.name} - ₹${item.price}</div>`).join('');
+            document.getElementById('cart-total').innerText = `TOTAL: ₹${total}`;
+        }
+
+        async function checkoutCart() {
+            if (!loggedUser) return openAuth('LOGIN');
+            const res = await fetch(`${API_BASE}/create-checkout-session`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userEmail: loggedUser.email, items: cart }) });
+            const session = await res.json();
+            stripe.redirectToCheckout({ sessionId: session.id });
+        }
+
+        async function uploadProduct() {
+            const formData = new FormData();
+            formData.append('name', document.getElementById('p-name').value);
+            formData.append('price', document.getElementById('p-price').value);
+            formData.append('image', document.getElementById('p-image').files[0]);
+            await fetch(`${API_BASE}/admin/products`, { method: 'POST', body: formData });
+            showToast("UPLOADED"); loadProducts();
+        }
+
+        function openAuth(m) {
+            document.getElementById('auth-overlay').style.display = 'flex';
+            document.getElementById('auth-title').innerText = m;
+            document.getElementById('auth-fields').innerHTML = m === 'SIGNUP' ? `<input id="a-name" placeholder="NAME"><input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASS">` : `<input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASS">`;
+        }
+        function toggleAuth() { openAuth(document.getElementById('auth-title').innerText === 'LOGIN' ? 'SIGNUP' : 'LOGIN'); }
+        function showToast(m) { const t = document.getElementById('toast'); t.innerText = m; t.style.display = "block"; setTimeout(() => t.style.display = "none", 3000); }
+        function toggleCart() { document.getElementById('cart-sidebar').classList.toggle('open'); }
+
         const canvas = document.getElementById("hero-canvas");
         const ctx = canvas.getContext("2d");
-        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-        window.addEventListener('resize', resize); resize();
-
+        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
         const images = [];
-        let loadedCount = 0;
-        for(let i=1; i<=50; i++) {
-            const img = new Image();
-            img.src = `frames/${i.toString().padStart(2, '0')}.jpg`; 
-            img.onload = () => { 
-                loadedCount++; 
-                if(loadedCount === 1) requestAnimationFrame(anim); 
-            };
-            images.push(img);
-        }
-        
+        for(let i=1; i<=50; i++) { const img = new Image(); img.src = `frames/${i.toString().padStart(2, '0')}.jpg`; images.push(img); }
         let idx = 0;
         function anim() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.clearRect(0,0,canvas.width,canvas.height);
             const currentImg = images[Math.floor(idx % 50)];
-            if(currentImg && currentImg.complete) {
+            if(currentImg?.complete) {
                 const scale = Math.max(canvas.width / currentImg.width, canvas.height / currentImg.height);
-                const x = (canvas.width / 2) - (currentImg.width * scale / 2);
-                const y = (canvas.height / 2) - (currentImg.height * scale / 2);
-                ctx.drawImage(currentImg, x, y, currentImg.width * scale, currentImg.height * scale);
+                ctx.drawImage(currentImg, canvas.width/2 - (currentImg.width*scale)/2, canvas.height/2 - (currentImg.height*scale)/2, currentImg.width*scale, currentImg.height*scale);
             }
-            idx += 0.15;
-            requestAnimationFrame(anim);
+            idx += 0.15; requestAnimationFrame(anim);
         }
-
-        async function checkStatus() {
-            try { 
-                const res = await fetch(`${API_BASE}/status`);
-                if(res.ok) document.getElementById('status-dot').classList.add('online');
-            } catch(e) {}
-        }
-        checkStatus();
+        images[0].onload = anim;
+        async function checkStatus() { try { const res = await fetch(`${API_BASE}/status`); if(res.ok) document.getElementById('status-dot').classList.add('online'); } catch(e) {} }
+        checkStatus(); loadProducts();
     </script>
 </body>
 </html>
