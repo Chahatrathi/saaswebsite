@@ -58,7 +58,7 @@
         <div class="nav-links">
             <a onclick="showPage('home-page')">Home</a>
             <a onclick="showPage('store-page'); loadProducts();">Store</a>
-            <a onclick="toggleCart()">Cart (<span id="cart-count">0</span>)</a>
+            <a id="cart-nav-link" onclick="toggleCart()">Cart (<span id="cart-count">0</span>)</a>
             <a id="contact-link" onclick="showPage('contact-page')">Contact</a>
             <a id="admin-link" onclick="showPage('admin-page'); loadAdminData();" style="display:none; color:var(--green);">Admin</a>
             <a id="auth-trigger" onclick="openAuth('LOGIN')">Account</a>
@@ -115,7 +115,6 @@
         const stripe = Stripe('pk_test_51TGFqzEvRNYv35zvMRUZZZ67MAw9wYzSSU7jcz8yRDSAhyXVYSr8lZ0sGXlJoMnj6PqrvBa3KiIvqHTIayDenHjd00ag4jevWd'); 
         let loggedUser = null; let cart = []; let allProducts = []; let discount = 0;
 
-        // --- CART & SHIPPING ---
         function updateCartUI() {
             const list = document.getElementById('cart-items');
             document.getElementById('cart-count').innerText = cart.length;
@@ -142,24 +141,15 @@
         async function checkoutCart() {
             if (!loggedUser) return openAuth('LOGIN');
             if (cart.length === 0) return alert("CART EMPTY");
-            
-            const subtotal = cart.reduce((sum, item) => sum + item.price, 0);
-            const shipping = (subtotal * (1 - discount) >= 999) ? 0 : 99;
-            
-            // Send exactly what backend expects
             const res = await fetch(`${API_BASE}/create-checkout-session`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    userEmail: loggedUser.email, 
-                    items: cart.map(i => ({ name: `${i.name} (${i.size})`, price: i.price })) 
-                })
+                body: JSON.stringify({ userEmail: loggedUser.email, items: cart.map(i => ({ name: `${i.name} (${i.size})`, price: i.price })) })
             });
             const session = await res.json();
             stripe.redirectToCheckout({ sessionId: session.id });
         }
 
-        // --- AUTH & ADMIN ---
         async function submitAuth() {
             const mode = document.getElementById('auth-title').innerText.toLowerCase();
             const res = await fetch(`${API_BASE}/${mode}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ email: document.getElementById('a-email').value, password: document.getElementById('a-pass').value, fullName: document.getElementById('a-name')?.value }) });
@@ -170,18 +160,20 @@
                 document.getElementById('auth-overlay').style.display = 'none';
                 document.getElementById('auth-trigger').innerText = (loggedUser.name || "USER").toUpperCase();
                 document.getElementById('logout-link').style.display = 'inline-block';
+                
                 const isAdmin = loggedUser.email === "chahat.rathi1@gmail.com";
                 document.getElementById('admin-link').style.display = isAdmin ? 'inline-block' : 'none';
+                document.getElementById('cart-nav-link').style.display = isAdmin ? 'none' : 'inline-block';
                 document.getElementById('contact-link').style.display = isAdmin ? 'none' : 'inline-block';
+                
                 loadProducts();
+                showToast("LOGGED IN");
             } else alert(data.error);
         }
 
         async function loadProducts() {
             const res = await fetch(`${API_BASE}/products`); allProducts = await res.json();
-            // HIDDEN ADD TO CART FOR ADMIN EMAIL
             const isAdmin = loggedUser && loggedUser.email === "chahat.rathi1@gmail.com";
-            
             document.getElementById('product-grid').innerHTML = allProducts.map(p => `
                 <div style="background:#111; padding:20px; border:1px solid #222; text-align:center;">
                     <img src="${p.image}" style="width:100%; height:250px; object-fit:cover; margin-bottom:15px;" onerror="this.src='https://via.placeholder.com/250'">
@@ -193,38 +185,28 @@
                 </div>`).join('');
         }
 
-        // --- HERO ANIMATION (FIXED) ---
         const canvas = document.getElementById("hero-canvas");
         const ctx = canvas.getContext("2d");
         canvas.width = window.innerWidth; canvas.height = window.innerHeight;
         const images = [];
-        let framesLoaded = 0;
-
-        for(let i=1; i<=30; i++) { // Using 30 frames for stability
+        for(let i=1; i<=30; i++) {
             const img = new Image();
             img.src = `frames/${i.toString().padStart(2, '0')}.jpg`;
-            img.onload = () => framesLoaded++;
             images.push(img);
         }
-
         let idx = 0;
         function anim() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            if (images.length > 0) {
-                const currentImg = images[Math.floor(idx % images.length)];
-                if (currentImg && currentImg.complete && currentImg.width > 0) {
-                    const scale = Math.max(canvas.width / currentImg.width, canvas.height / currentImg.height);
-                    const x = (canvas.width / 2) - (currentImg.width * scale) / 2;
-                    const y = (canvas.height / 2) - (currentImg.height * scale) / 2;
-                    ctx.drawImage(currentImg, x, y, currentImg.width * scale, currentImg.height * scale);
-                }
+            const currentImg = images[Math.floor(idx % images.length)];
+            if (currentImg && currentImg.complete) {
+                const scale = Math.max(canvas.width / currentImg.width, canvas.height / currentImg.height);
+                ctx.drawImage(currentImg, (canvas.width/2)-(currentImg.width*scale)/2, (canvas.height/2)-(currentImg.height*scale)/2, currentImg.width*scale, currentImg.height*scale);
             }
             idx += 0.15;
             requestAnimationFrame(anim);
         }
         requestAnimationFrame(anim);
 
-        // --- UI HELPERS ---
         function toggleCart() { document.getElementById('cart-sidebar').classList.toggle('open'); }
         function selectSize(btn) { btn.parentElement.querySelectorAll('.size-btn').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); }
         function showPage(id) { document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); document.getElementById(id).classList.add('active'); }
