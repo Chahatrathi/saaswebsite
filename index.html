@@ -1,271 +1,176 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ELITE | Official Store</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-    <script src="https://js.stripe.com/v3/"></script>
     <style>
         :root { --bg: #000; --accent: #fff; --green: #00ff88; --red: #ff4444; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: var(--bg); color: #fff; font-family: 'Helvetica Neue', Arial, sans-serif; overflow-x: hidden; }
+        body { background: var(--bg); color: #fff; font-family: 'Helvetica Neue', Arial; overflow-x: hidden; }
 
-        /* --- NAVIGATION --- */
-        nav { position: fixed; top: 0; width: 100%; display: flex; justify-content: space-between; padding: 25px 40px; z-index: 9999; background: rgba(0,0,0,0.8); backdrop-filter: blur(15px); }
-        .logo { font-weight: 900; letter-spacing: 8px; cursor: pointer; text-transform: uppercase; }
+        nav { position: fixed; top: 0; width: 100%; display: flex; justify-content: space-between; padding: 25px 40px; z-index: 1000; background: rgba(0,0,0,0.6); backdrop-filter: blur(10px); }
+        .logo { font-weight: 900; letter-spacing: 8px; cursor: pointer; }
         .nav-links { display: flex; gap: 20px; font-size: 10px; letter-spacing: 2px; align-items: center; }
-        .nav-links a { cursor: pointer; opacity: 0.7; text-transform: uppercase; color: #fff; text-decoration: none; transition: 0.3s; }
-        .nav-links a:hover { opacity: 1; color: var(--green); }
+        .nav-links a { cursor: pointer; color: #fff; text-decoration: none; text-transform: uppercase; opacity: 0.8; }
         
-        /* --- PAGE SYSTEM --- */
-        .page { display: none; min-height: 100vh; width: 100%; padding: 120px 30px; position: relative; z-index: 10; }
+        .page { display: none; min-height: 100vh; padding: 120px 30px; position: relative; z-index: 10; }
         .page.active { display: block; }
-        #home-page.active { display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0; }
 
-        #hero-canvas { position: fixed; inset: 0; z-index: 1; filter: brightness(0.5); pointer-events: none; }
-        
-        /* --- CART SIDEBAR --- */
-        #cart-sidebar { position: fixed; right: -400px; top: 0; width: 350px; height: 100vh; background: #050505; border-left: 1px solid #222; z-index: 10001; padding: 40px; display: flex; flex-direction: column; transition: 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
-        #cart-sidebar.open { right: 0; }
-        .cart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-        #cart-items-list { flex-grow: 1; overflow-y: auto; margin-bottom: 20px; }
-        .cart-item { display: flex; justify-content: space-between; padding: 15px 0; border-bottom: 1px solid #111; font-size: 11px; letter-spacing: 1px; }
-        .cart-footer { border-top: 1px solid #222; padding-top: 20px; }
+        /* CANVAS BACKGROUND FOR GYM FRAMES */
+        #hero-canvas { position: fixed; inset: 0; z-index: 1; filter: brightness(0.4); pointer-events: none; }
 
-        /* --- PRODUCT CARDS --- */
-        .marquee-container { width: 100%; overflow: hidden; background: #000; padding: 40px 0; z-index: 20; }
-        .marquee-content { display: flex; width: 200%; animation: scroll 30s linear infinite; }
-        @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-        .card { flex: 0 0 300px; height: 420px; margin: 0 15px; background: #0a0a0a; border: 1px solid #1a1a1a; padding: 20px; display: flex; flex-direction: column; justify-content: flex-end; transition: 0.4s; }
-        .card:hover { border-color: #fff; transform: translateY(-10px); }
-        .btn-add { width: 100%; padding: 12px; background: #fff; color: #000; border: none; font-weight: 900; cursor: pointer; font-size: 10px; margin-top: 15px; letter-spacing: 1px; }
+        .btn-prime { width: 100%; padding: 15px; background: #fff; color: #000; border: none; font-weight: 900; cursor: pointer; font-size: 10px; margin-top: 10px; }
+        .btn-delete { background: var(--red); color: white; margin-top: 5px; }
 
-        /* --- CONTACT --- */
-        #contact-page { text-align: center; display: none; flex-direction: column; align-items: center; justify-content: center; }
-        #contact-page.active { display: flex; }
-        .contact-box { width: 100%; max-width: 450px; background: #0a0a0a; padding: 40px; border: 1px solid #1a1a1a; }
-
-        /* --- AUTH --- */
-        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 10000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(20px); }
-        .glass-box { background: #050505; padding: 40px; width: 90%; max-width: 400px; border: 1px solid #222; text-align: center; }
-        input, textarea { width: 100%; padding: 15px; margin-bottom: 15px; background: #000; border: 1px solid #222; color: #fff; outline: none; font-size: 13px; }
-        .btn-prime { width: 100%; padding: 16px; background: #fff; color: #000; border: none; font-weight: 900; cursor: pointer; letter-spacing: 2px; text-transform: uppercase; }
-        
-        .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); display: inline-block; margin-left: 8px; }
+        input, textarea { width: 100%; padding: 15px; margin-bottom: 10px; background: rgba(255,255,255,0.05); border: 1px solid #333; color: #fff; outline: none; }
+        #toast { position: fixed; bottom: 30px; right: 30px; background: #fff; color: #000; padding: 15px 30px; display: none; z-index: 9999; font-weight: bold; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); display: inline-block; margin-left: 5px; }
         .online { background: var(--green) !important; box-shadow: 0 0 10px var(--green); }
-        #toast { position: fixed; bottom: 30px; right: 30px; background: #fff; color: #000; padding: 15px 30px; display: none; z-index: 11000; font-size: 11px; font-weight: 900; letter-spacing: 1px; }
     </style>
 </head>
 <body>
 
     <div id="toast">MESSAGE</div>
 
-    <div id="cart-sidebar">
-        <div class="cart-header">
-            <h2 style="letter-spacing:5px; font-size: 18px;">CART</h2>
-            <span onclick="toggleCart()" style="cursor:pointer; font-size: 10px; opacity: 0.5;">CLOSE</span>
-        </div>
-        <div id="cart-items-list">
-            </div>
-        <div class="cart-footer">
-            <div style="display:flex; justify-content:space-between; margin-bottom: 20px; font-weight: 900;">
-                <span>TOTAL</span>
-                <span id="cart-total-price">$0</span>
-            </div>
-            <button class="btn-prime" onclick="initiateStripeCheckout()">CHECKOUT</button>
-        </div>
-    </div>
-
     <nav>
         <div class="logo" onclick="showPage('home-page')">ELITE</div>
         <div class="nav-links">
             <a onclick="showPage('home-page')">Home</a>
-            <a onclick="showPage('feed-page')">Feed</a>
-            <a onclick="showPage('contact-page')">Contact</a>
-            <a onclick="toggleCart()">Cart (<span id="cart-count">0</span>)</a>
+            <a onclick="showPage('store-page'); loadProducts();">Store</a>
+            <a id="admin-link" onclick="showPage('admin-page'); loadAdminProducts();" style="display:none; color:var(--green);">Admin</a>
             <a id="auth-trigger" onclick="openAuth('LOGIN')">Account<span id="status-dot" class="status-dot"></span></a>
         </div>
     </nav>
 
     <canvas id="hero-canvas"></canvas>
 
-    <div id="home-page" class="page active">
-        <div style="height:80vh; display:flex; align-items:center; justify-content:center;">
-            <h1 style="font-size:22vw; font-weight:900; letter-spacing:-10px; line-height:0.8;">ELITE</h1>
+    <div id="home-page" class="page active" style="z-index: 20;">
+        <div style="height:70vh; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+            <h1 style="font-size:15vw; font-weight:900; line-height:0.8;">ELITE</h1>
+            <p style="letter-spacing:10px; margin-top:20px;">GYM-WEAR INDIA</p>
         </div>
-        <div class="marquee-container">
-            <div class="marquee-content">
-                <div class="card"><h3>PRO TEE</h3><p>$85</p><button class="btn-add" onclick="addToCart('PRO TEE', 85)">ADD TO CART</button></div>
-                <div class="card"><h3>ELITE HOOD</h3><p>$120</p><button class="btn-add" onclick="addToCart('ELITE HOOD', 120)">ADD TO CART</button></div>
-                <div class="card"><h3>CARGO V2</h3><p>$180</p><button class="btn-add" onclick="addToCart('CARGO V2', 180)">ADD TO CART</button></div>
-                <div class="card"><h3>PRO TEE</h3><p>$85</p><button class="btn-add" onclick="addToCart('PRO TEE', 85)">ADD TO CART</button></div>
-                <div class="card"><h3>ELITE HOOD</h3><p>$120</p><button class="btn-add" onclick="addToCart('ELITE HOOD', 120)">ADD TO CART</button></div>
+    </div>
+
+    <div id="store-page" class="page">
+        <h2 style="text-align:center; letter-spacing:5px;">LATEST DROPS</h2>
+        <div id="product-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:30px; margin-top:50px;"></div>
+    </div>
+
+    <div id="admin-page" class="page">
+        <div style="max-width:800px; margin:0 auto;">
+            <div style="background:#111; padding:40px; border:1px solid #333; margin-bottom:40px;">
+                <h3>ADD NEW PRODUCT</h3>
+                <input type="text" id="p-name" placeholder="PRODUCT NAME">
+                <input type="number" id="p-price" placeholder="PRICE (₹)">
+                <button class="btn-prime" onclick="addProduct()">PUBLISH</button>
             </div>
+            <h3>INVENTORY</h3>
+            <div id="admin-product-list" style="margin-top:20px;"></div>
         </div>
     </div>
 
-    <div id="feed-page" class="page">
-        <h2 style="text-align:center; font-size:40px; margin-bottom:50px; letter-spacing:10px;">THE FEED</h2>
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:20px;">
-            <div style="aspect-ratio:1/1; background:#111;"></div>
-            <div style="aspect-ratio:1/1; background:#111;"></div>
-            <div style="aspect-ratio:1/1; background:#111;"></div>
-        </div>
-    </div>
-
-    <div id="contact-page" class="page">
-        <div class="contact-box">
-            <h1 style="letter-spacing:10px; margin-bottom:30px;">CONTACT US</h1>
-            <input type="text" id="c-name" placeholder="FULL NAME">
-            <input type="email" id="c-email" placeholder="EMAIL">
-            <textarea id="c-msg" rows="5" placeholder="HOW CAN WE HELP?"></textarea>
-            <button class="btn-prime" onclick="handleContact()">SUBMIT</button>
-        </div>
-    </div>
-
-    <div id="auth-overlay" class="overlay">
-        <div class="glass-box">
-            <h2 id="auth-title" style="margin-bottom:25px; letter-spacing:5px;">LOGIN</h2>
-            <div id="auth-form-fields"></div>
-            <button id="auth-btn" class="btn-prime" onclick="submitAuth()">PROCEED</button>
-            <p onclick="switchAuthMode()" style="font-size:10px; margin-top:20px; cursor:pointer; opacity:0.5; text-decoration:underline;">OR CREATE ACCOUNT</p>
-            <p onclick="document.getElementById('auth-overlay').style.display='none'" style="font-size:10px; margin-top:15px; cursor:pointer;">CLOSE</p>
+    <div id="auth-overlay" style="position:fixed; inset:0; background:rgba(0,0,0,0.9); display:none; align-items:center; justify-content:center; z-index:5000;">
+        <div style="background:#000; border:1px solid #333; padding:40px; width:350px; text-align:center;">
+            <h2 id="auth-title">LOGIN</h2><br>
+            <div id="auth-fields"></div>
+            <button class="btn-prime" onclick="submitAuth()">CONTINUE</button>
+            <p onclick="toggleAuth()" style="font-size:10px; margin-top:20px; cursor:pointer; opacity:0.5;">OR SIGNUP</p>
         </div>
     </div>
 
     <script>
-        const API_BASE = "https://ecommercewebsite-diea.onrender.com/api";
-        const stripe = Stripe('pk_test_51TGFqzEvRNYv35zvMRUZZZ67MAw9wYzSSU7jcz8yRDSAhyXVYSr8lZ0sGXlJoMnj6PqrvBa3KiIvqHTIayDenHjd00ag4jevWd'); 
+        const API_BASE = "http://localhost:5000/api";
         let loggedUser = null;
-        let cart = [];
 
-        // --- PAGE SWITCHER ---
         function showPage(id) {
-            const pages = document.querySelectorAll('.page');
-            pages.forEach(p => {
-                p.classList.remove('active');
-                p.style.display = 'none'; 
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            // Dim frames on other pages
+            document.getElementById('hero-canvas').style.opacity = (id === 'home-page') ? '1' : '0.1';
+        }
+
+        // --- PRODUCT LOGIC ---
+        async function loadProducts() {
+            const res = await fetch(`${API_BASE}/products`);
+            const products = await res.json();
+            document.getElementById('product-grid').innerHTML = products.map(p => `
+                <div style="background:rgba(255,255,255,0.03); border:1px solid #222; padding:20px;">
+                    <h3>${p.name.toUpperCase()}</h3>
+                    <p style="color:var(--green); margin:10px 0;">₹${p.price}</p>
+                    <button class="btn-prime">ADD TO CART</button>
+                </div>
+            `).join('');
+        }
+
+        async function loadAdminProducts() {
+            const res = await fetch(`${API_BASE}/products`);
+            const products = await res.json();
+            document.getElementById('admin-product-list').innerHTML = products.map(p => `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#111; padding:15px; border-bottom:1px solid #222;">
+                    <span>${p.name} - ₹${p.price}</span>
+                    <button class="btn-prime btn-delete" style="width:100px;" onclick="deleteProduct('${p._id}')">DELETE</button>
+                </div>
+            `).join('');
+        }
+
+        async function addProduct() {
+            const name = document.getElementById('p-name').value;
+            const price = document.getElementById('p-price').value;
+            await fetch(`${API_BASE}/admin/products`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ name, price })
             });
-            const target = document.getElementById(id);
-            if(target) {
-                target.classList.add('active');
-                target.style.display = (id === 'home-page' || id === 'contact-page') ? 'flex' : 'block';
-            }
-            window.scrollTo(0,0);
+            showToast("ADDED");
+            loadAdminProducts();
         }
 
-        // --- CART LOGIC ---
-        function toggleCart() {
-            document.getElementById('cart-sidebar').classList.toggle('open');
+        async function deleteProduct(id) {
+            await fetch(`${API_BASE}/admin/products/${id}`, { method: 'DELETE' });
+            showToast("DELETED");
+            loadAdminProducts();
         }
 
-        function addToCart(name, price) {
-            cart.push({ name, price });
-            updateCartUI();
-            showToast(`${name} ADDED`);
-        }
-
-        function updateCartUI() {
-            const list = document.getElementById('cart-items-list');
-            const totalEl = document.getElementById('cart-total-price');
-            const countEl = document.getElementById('cart-count');
-            
-            list.innerHTML = "";
-            let total = 0;
-            
-            cart.forEach((item, index) => {
-                total += item.price;
-                list.innerHTML += `
-                    <div class="cart-item">
-                        <span>${item.name}</span>
-                        <span>$${item.price}</span>
-                    </div>`;
-            });
-            
-            totalEl.innerText = `$${total}`;
-            countEl.innerText = cart.length;
-        }
-
-        async function initiateStripeCheckout() {
-            if (cart.length === 0) return showToast("CART IS EMPTY");
-            if (!loggedUser) return showToast("PLEASE LOGIN TO BUY");
-
-            try {
-                const res = await fetch(`${API_BASE}/checkout`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ items: cart })
-                });
-                const session = await res.json();
-                if(session.id) {
-                    stripe.redirectToCheckout({ sessionId: session.id });
-                } else {
-                    alert("Checkout Error");
-                }
-            } catch(e) {
-                showToast("CHECKOUT FAILED");
-            }
-        }
-
-        // --- AUTH LOGIC ---
-        function openAuth(mode) {
+        // --- AUTH ---
+        function openAuth(m) {
             document.getElementById('auth-overlay').style.display = 'flex';
-            document.getElementById('auth-title').innerText = mode;
-            const fields = document.getElementById('auth-form-fields');
-            fields.innerHTML = mode === 'SIGNUP' ? 
-                `<input id="a-name" placeholder="NAME"><input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASSWORD">` :
-                `<input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASSWORD">`;
+            document.getElementById('auth-title').innerText = m;
+            document.getElementById('auth-fields').innerHTML = m === 'SIGNUP' ? 
+                `<input id="a-name" placeholder="NAME"><input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASS">` :
+                `<input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASS">`;
         }
 
-        function switchAuthMode() {
-            const current = document.getElementById('auth-title').innerText;
-            openAuth(current === 'LOGIN' ? 'SIGNUP' : 'LOGIN');
+        function toggleAuth() {
+            const c = document.getElementById('auth-title').innerText;
+            openAuth(c === 'LOGIN' ? 'SIGNUP' : 'LOGIN');
         }
 
         async function submitAuth() {
-            const btn = document.getElementById('auth-btn');
+            const mode = document.getElementById('auth-title').innerText.toLowerCase();
             const email = document.getElementById('a-email').value;
             const pass = document.getElementById('a-pass').value;
-            const mode = document.getElementById('auth-title').innerText.toLowerCase();
-
-            btn.innerText = "CONNECTING...";
-            btn.disabled = true;
-
-            try {
-                const res = await fetch(`${API_BASE}/${mode}`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ email, password: pass, fullName: document.getElementById('a-name')?.value })
-                });
-                const data = await res.json();
-                if(res.ok) {
-                    loggedUser = data.user;
-                    document.getElementById('auth-overlay').style.display = 'none';
-                    document.getElementById('auth-trigger').innerHTML = `${loggedUser.name.toUpperCase()}<span class="status-dot online"></span>`;
-                    showToast("WELCOME BACK");
-                } else { alert(data.error); }
-            } catch(e) { alert("Backend is waking up. Please retry in 30 seconds."); }
-            btn.innerText = "PROCEED"; btn.disabled = false;
-        }
-
-        function handleContact() {
-            const name = document.getElementById('c-name').value;
-            if(name) {
-                showToast(`THANK YOU, ${name.toUpperCase()}`);
-                document.getElementById('c-name').value = "";
-                document.getElementById('c-msg').value = "";
-            }
+            const res = await fetch(`${API_BASE}/${mode}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ email, password: pass, fullName: document.getElementById('a-name')?.value })
+            });
+            const data = await res.json();
+            if(res.ok) {
+                loggedUser = data.user;
+                document.getElementById('auth-overlay').style.display = 'none';
+                document.getElementById('auth-trigger').innerText = loggedUser.name.toUpperCase();
+                if(loggedUser.role === 'admin') document.getElementById('admin-link').style.display = 'block';
+                showToast("LOGGED IN");
+            } else { alert("Login Error"); }
         }
 
         function showToast(m) {
-            const t = document.getElementById('toast');
-            t.innerText = m; t.style.display = "block";
-            setTimeout(() => t.style.display = "none", 4000);
+            const t = document.getElementById('toast'); t.innerText = m; t.style.display = "block";
+            setTimeout(() => t.style.display = "none", 3000);
         }
 
-        // --- CANVAS BACKGROUND ---
+        // --- CANVAS ANIMATION FOR GYM GIRL ---
         const canvas = document.getElementById("hero-canvas");
         const ctx = canvas.getContext("2d");
         function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
