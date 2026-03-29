@@ -7,6 +7,7 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const multer = require('multer');
+const nodemailer = require('nodemailer');
 
 const app = express();
 
@@ -20,6 +21,15 @@ app.use(cors({
 app.use(express.json());
 
 const MASTER_ADMIN = "chahat.rathi1@gmail.com";
+
+// --- NODEMAILER CONFIG ---
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER, 
+        pass: process.env.EMAIL_PASS // Use a Google "App Password" here
+    }
+});
 
 // --- CLOUDINARY CONFIG ---
 cloudinary.config({
@@ -44,31 +54,21 @@ mongoose.connect(process.env.MONGO_URI)
 
 // --- MODELS ---
 const Product = mongoose.model('Product', new mongoose.Schema({
-    name: String, 
-    price: Number, 
-    image: String, 
+    name: String, price: Number, image: String, 
     sizes: { type: [String], default: ["S", "M", "L", "XL"] }
 }));
 
 const User = mongoose.model('User', new mongoose.Schema({
-    fullName: String, 
-    email: { type: String, unique: true, lowercase: true }, 
-    password: String, 
-    role: String
+    fullName: String, email: { type: String, unique: true, lowercase: true }, 
+    password: String, role: String
 }));
 
 const Order = mongoose.model('Order', new mongoose.Schema({
-    userEmail: String, 
-    items: Array, 
-    total: Number, 
-    date: { type: Date, default: Date.now }
+    userEmail: String, items: Array, total: Number, date: { type: Date, default: Date.now }
 }));
 
 const Query = mongoose.model('Query', new mongoose.Schema({
-    name: String, 
-    email: String, 
-    message: String, 
-    date: { type: Date, default: Date.now }
+    name: String, email: String, message: String, date: { type: Date, default: Date.now }
 }));
 
 // --- ROUTES ---
@@ -106,17 +106,29 @@ app.post('/api/login', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Server Error" }); }
 });
 
-// 4. Contact/Query Submission
+// 4. Contact Route with Admin Email Notification
 app.post('/api/contact', async (req, res) => {
     try {
         const { name, email, message } = req.body;
         const newQuery = new Query({ name, email, message });
         await newQuery.save();
+
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: MASTER_ADMIN,
+            subject: `🔥 NEW ELITE QUERY: ${name}`,
+            text: `New customer query:\n\nName: ${name}\nEmail: ${email}\nMessage: ${message}`
+        };
+
+        transporter.sendMail(mailOptions, (error, info) => {
+            if (error) console.log("Admin Email Error:", error);
+        });
+
         res.status(201).json({ message: "Sent" });
     } catch (e) { res.status(500).json({ error: "Failed" }); }
 });
 
-// 5. Admin: Dashboard stats (Revenue + Queries)
+// 5. Admin: Dashboard stats
 app.get('/api/admin/stats', async (req, res) => {
     try {
         const queries = await Query.find().sort({ date: -1 });
@@ -126,7 +138,7 @@ app.get('/api/admin/stats', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Fetch failed" }); }
 });
 
-// 6. Admin: Product Upload with Cloudinary
+// 6. Admin: Product Upload
 app.post('/api/admin/products', upload.single('image'), async (req, res) => {
     try {
         const { name, price } = req.body;
@@ -136,7 +148,7 @@ app.post('/api/admin/products', upload.single('image'), async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Upload Failed" }); }
 });
 
-// 7. Admin: Delete Product (Added for your Inventory management)
+// 7. Admin: Delete Product
 app.delete('/api/admin/products/:id', async (req, res) => {
     try {
         await Product.findByIdAndDelete(req.params.id);
@@ -144,7 +156,7 @@ app.delete('/api/admin/products/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Delete failed" }); }
 });
 
-// 8. Orders: Get History for Invoices
+// 8. Orders: Get History
 app.get('/api/orders/:email', async (req, res) => {
     try {
         const orders = await Order.find({ userEmail: req.params.email.toLowerCase() }).sort({ date: -1 });
@@ -152,7 +164,7 @@ app.get('/api/orders/:email', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Fetch failed" }); }
 });
 
-// 9. Payments: Stripe Route with mandatory India compliance
+// 9. Payments: Stripe Route with Customer Order Confirmation Email
 app.post('/api/create-checkout-session', async (req, res) => {
     try {
         const { items, userEmail } = req.body;
@@ -176,7 +188,25 @@ app.post('/api/create-checkout-session', async (req, res) => {
             cancel_url: `${req.headers.origin}/?payment=cancel`,
         });
 
-        await new Order({ userEmail: userEmail.toLowerCase(), items, total: totalAmount }).save();
+        // Save the order to DB
+        const newOrder = new Order({ userEmail: userEmail.toLowerCase(), items, total: totalAmount });
+        await newOrder.save();
+
+        // SEND ORDER CONFIRMATION EMAIL TO CUSTOMER
+        const itemDetails = items.map(i => `- ${i.name} (${i.size}) x${i.quantity || 1}`).join('\n');
+        
+        const customerMailOptions = {
+            from: `ELITE STORE <${process.env.EMAIL_USER}>`,
+            to: userEmail,
+            subject: `Order Confirmed! Your ELITE Gear is on the way 📦`,
+            text: `Hi! \n\nThank you for shopping with ELITE. Your order has been successfully placed.\n\nOrder Summary:\n${itemDetails}\n\nTotal Paid: ₹${totalAmount}\n\nWe will notify you once your package ships!\n\nStay Elite,\nChahat Rathi`
+        };
+
+        transporter.sendMail(customerMailOptions, (error, info) => {
+            if (error) console.log("Customer Email Error:", error);
+            else console.log("Customer Confirmation Sent:", info.response);
+        });
+
         res.json({ id: session.id });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
