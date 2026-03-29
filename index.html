@@ -31,7 +31,6 @@
         .btn-del { background: var(--red); color: #fff; font-size: 8px; padding: 5px; width: auto; margin-top: 5px; cursor: pointer; border: none; }
 
         input, select, textarea { width: 100%; padding: 15px; margin-bottom: 10px; background: rgba(255,255,255,0.05); border: 1px solid #333; color: #fff; outline: none; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); display: inline-block; margin-left: 5px; }
         .online { background: var(--green) !important; box-shadow: 0 0 10px var(--green); }
         #toast { position: fixed; bottom: 30px; right: 30px; background: #fff; color: #000; padding: 15px 30px; display: none; z-index: 9999; font-weight: bold; font-size: 10px; }
         
@@ -47,10 +46,8 @@
         .size-btn { background: #000; border: 1px solid #333; color: #fff; padding: 5px 10px; cursor: pointer; font-size: 10px; transition: 0.3s; }
         .size-btn.selected { border-color: var(--green); color: var(--green); }
 
-        /* Cart Item Styling */
         .cart-item-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #222; }
         .btn-remove { background: none; border: 1px solid var(--red); color: var(--red); font-size: 8px; padding: 2px 5px; cursor: pointer; }
-        .btn-remove:hover { background: var(--red); color: #fff; }
     </style>
 </head>
 <body>
@@ -58,6 +55,20 @@
     <div id="toast">MESSAGE</div>
 
     <div id="size-modal"><div class="size-content"><h2>SIZE GUIDE</h2><table><tr><th>SIZE</th><th>CHEST</th><th>LENGTH</th></tr><tr><td>S</td><td>42</td><td>27</td></tr><tr><td>M</td><td>44</td><td>28</td></tr><tr><td>L</td><td>46</td><td>29</td></tr><tr><td>XL</td><td>48</td><td>30</td></tr></table><button class="btn-prime" onclick="toggleSizeModal()">CLOSE</button></div></div>
+
+    <div id="cart-sidebar">
+        <h2 style="letter-spacing:5px; margin-bottom:30px;">CART</h2>
+        <div id="cart-items"></div>
+        
+        <div style="margin-top:20px; border-top:1px solid #222; padding-top:20px;">
+            <input type="text" id="promo-input" placeholder="PROMO CODE" style="font-size:10px; padding:10px;">
+            <button class="btn-prime" style="margin-top:0; padding:10px; background:var(--green);" onclick="applyPromo()">APPLY</button>
+        </div>
+
+        <div id="cart-total" style="border-top:1px solid #222; padding-top:20px; font-weight:bold; margin-top: 20px;">TOTAL: ₹0</div>
+        <button class="btn-prime" onclick="checkoutCart()">CHECKOUT VIA STRIPE</button>
+        <button onclick="toggleCart()" style="background:none; border:none; color:#555; margin-top:20px; cursor:pointer; width:100%;">CLOSE</button>
+    </div>
 
     <nav>
         <div class="logo" onclick="showPage('home-page')">ELITE</div>
@@ -138,8 +149,72 @@
         let loggedUser = null;
         let cart = [];
         let allProducts = [];
+        let discount = 0;
 
-        // --- AUTH ---
+        // --- CART LOGIC ---
+        function toggleCart() { document.getElementById('cart-sidebar').classList.toggle('open'); }
+
+        function addToCart(id, name, price, image, btn) {
+            const selectedSizeBtn = btn.parentElement.querySelector('.size-btn.selected');
+            if(!selectedSizeBtn) return alert("PLEASE SELECT A SIZE FIRST!");
+            const size = selectedSizeBtn.innerText;
+            const tempId = Math.random().toString(36).substr(2, 9);
+            cart.push({ id, tempId, name, price, image, size });
+            updateCartUI();
+            showToast("ADDED");
+        }
+
+        function removeFromCart(tid) {
+            cart = cart.filter(i => i.tempId !== tid);
+            updateCartUI();
+            showToast("REMOVED");
+        }
+
+        function applyPromo() {
+            const code = document.getElementById('promo-input').value.toUpperCase();
+            if(code === "ELITE10") {
+                discount = 0.10;
+                showToast("10% DISCOUNT APPLIED");
+            } else {
+                discount = 0;
+                alert("INVALID CODE");
+            }
+            updateCartUI();
+        }
+
+        function updateCartUI() {
+            const list = document.getElementById('cart-items');
+            document.getElementById('cart-count').innerText = cart.length;
+            let subtotal = cart.reduce((sum, item) => sum + item.price, 0);
+            let finalTotal = subtotal * (1 - discount);
+            
+            list.innerHTML = cart.map(item => `
+                <div class="cart-item-row">
+                    <div style="font-size:10px;">
+                        <b>${item.name}</b> (${item.size})<br>₹${item.price}
+                    </div>
+                    <button class="btn-remove" onclick="removeFromCart('${item.tempId}')">REMOVE</button>
+                </div>
+            `).join('');
+            
+            document.getElementById('cart-total').innerHTML = discount > 0 ? 
+                `<span style="text-decoration:line-through; opacity:0.5; font-size:10px;">₹${subtotal}</span> ₹${finalTotal.toFixed(0)} (PROMO APPLIED)` : 
+                `TOTAL: ₹${subtotal}`;
+        }
+
+        async function checkoutCart() {
+            if (!loggedUser) return openAuth('LOGIN');
+            const total = cart.reduce((sum, item) => sum + item.price, 0) * (1 - discount);
+            const res = await fetch(`${API_BASE}/create-checkout-session`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userEmail: loggedUser.email, items: cart, finalAmount: total })
+            });
+            const session = await res.json();
+            stripe.redirectToCheckout({ sessionId: session.id });
+        }
+
+        // --- AUTH & ADMIN (KEEP EXISTING) ---
         async function submitAuth() {
             const mode = document.getElementById('auth-title').innerText.toLowerCase();
             const res = await fetch(`${API_BASE}/${mode}`, {
@@ -162,123 +237,50 @@
             } else { alert(data.error); }
         }
 
-        async function checkVerifyLink() {
-            const email = new URLSearchParams(window.location.search).get('email');
-            if(email && window.location.pathname.includes('/verify')) {
-                showPage('verify-page');
-                const res = await fetch(`${API_BASE}/verify-email`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ email }) });
-                const d = await res.json(); document.getElementById('verify-msg').innerText = d.message;
-            }
-        }
-
-        function logout() {
-            loggedUser = null;
-            document.getElementById('auth-trigger').innerText = "ACCOUNT";
-            document.getElementById('logout-link').style.display = 'none';
-            document.getElementById('admin-link').style.display = 'none';
-            document.getElementById('contact-link').style.display = 'inline-block';
-            showPage('home-page'); showToast("LOGGED OUT");
-        }
-
-        // --- STORE & ADMIN ---
-        async function loadAdminData() {
-            try {
-                const res = await fetch(`${API_BASE}/admin/stats`);
-                const data = await res.json();
-                document.getElementById('revenue-display').innerText = `₹${data.totalRevenue}`;
-                const queryList = document.getElementById('admin-queries-list');
-                queryList.innerHTML = data.queries?.length ? data.queries.map(q => `<div class="query-item"><b>${q.name}</b><br>${q.message}<br><button class="btn-del" onclick="deleteQuery('${q._id}')">DELETE</button></div>`).join('') : "<p>NO QUERIES</p>";
-            } catch(e) {}
-        }
-
-        async function deleteQuery(id) {
-            const res = await fetch(`${API_BASE}/admin/queries/${id}`, { method: 'DELETE' });
-            if(res.ok) { showToast("DELETED"); await loadAdminData(); }
-        }
-
-        function displayProducts(products) {
-            const isOwner = loggedUser && loggedUser.email === "chahat.rathi1@gmail.com";
-            document.getElementById('product-grid').innerHTML = products.map(p => `
-                <div style="background:#111; padding:20px; border:1px solid #222; text-align:center;">
-                    <img src="${p.image}" style="width:100%; height:250px; object-fit:cover; margin-bottom:15px;" onerror="this.src='https://via.placeholder.com/250'">
-                    <h3 style="letter-spacing:2px;">${p.name.toUpperCase()}</h3>
-                    <p style="color:var(--green); font-weight:bold; margin: 10px 0;">₹${p.price}</p>
-                    ${!isOwner ? `
-                        <div class="size-selector" style="margin-bottom:15px; display:flex; justify-content:center; gap:5px;">
-                            ${['S','M','L','XL'].map(s => `<button class="size-btn" onclick="selectSize(this)">${s}</button>`).join('')}
-                        </div>
-                        <button class="btn-prime" onclick="addToCart('${p._id}', '${p.name}', ${p.price}, '${p.image}', this)">ADD TO CART</button>
-                    ` : `<p style="font-size:10px; opacity:0.5; border-top:1px solid #222; pt-10px;">ADMIN VIEW</p>`}
-                </div>
-            `).join('');
-        }
+        function logout() { loggedUser = null; location.reload(); }
 
         function selectSize(btn) {
             btn.parentElement.querySelectorAll('.size-btn').forEach(b => b.classList.remove('selected'));
             btn.classList.add('selected');
         }
 
-        function addToCart(id, name, price, image, btn) {
-            const selectedSizeBtn = btn.parentElement.querySelector('.size-btn.selected');
-            if(!selectedSizeBtn) return alert("PLEASE SELECT A SIZE FIRST!");
-
-            const size = selectedSizeBtn.innerText;
-            // Generate a temporary unique ID for front-end removal
-            const tempId = Date.now() + Math.random();
-            cart.push({ id, tempId, name, price, image, size, quantity: 1 });
-            updateCartUI();
-            showToast("ADDED TO CART");
-        }
-
-        // NEW: REMOVE FROM CART
-        function removeFromCart(tempId) {
-            cart = cart.filter(item => item.tempId !== tempId);
-            updateCartUI();
-            showToast("REMOVED");
-        }
-
-        function updateCartUI() {
-            const list = document.getElementById('cart-items');
-            document.getElementById('cart-count').innerText = cart.length;
-            let total = cart.reduce((sum, item) => sum + item.price, 0);
-            
-            list.innerHTML = cart.map(item => `
-                <div class="cart-item-row">
-                    <div style="font-size:10px;">
-                        <b>${item.name}</b><br>
-                        Size: ${item.size} - ₹${item.price}
-                    </div>
-                    <button class="btn-remove" onclick="removeFromCart(${item.tempId})">REMOVE</button>
-                </div>
-            `).join('');
-            
-            document.getElementById('cart-total').innerText = `TOTAL: ₹${total}`;
-        }
-
         async function loadProducts() {
             const res = await fetch(`${API_BASE}/products`);
             allProducts = await res.json();
-            displayProducts(allProducts);
+            document.getElementById('product-grid').innerHTML = allProducts.map(p => `
+                <div style="background:#111; padding:20px; border:1px solid #222; text-align:center;">
+                    <img src="${p.image}" style="width:100%; height:250px; object-fit:cover; margin-bottom:15px;" onerror="this.src='https://via.placeholder.com/250'">
+                    <h3>${p.name.toUpperCase()}</h3><p style="color:var(--green)">₹${p.price}</p>
+                    ${!(loggedUser && loggedUser.email === "chahat.rathi1@gmail.com") ? `
+                        <div class="size-selector" style="margin:15px 0; display:flex; justify-content:center; gap:5px;">
+                            ${['S','M','L','XL'].map(s => `<button class="size-btn" onclick="selectSize(this)">${s}</button>`).join('')}
+                        </div>
+                        <button class="btn-prime" onclick="addToCart('${p._id}', '${p.name}', ${p.price}, '${p.image}', this)">ADD TO CART</button>
+                    ` : `<p style="font-size:10px; opacity:0.5;">ADMIN VIEW</p>`}
+                </div>
+            `).join('');
             const track = document.getElementById('ticker-track');
             if(track) track.innerHTML = [...allProducts, ...allProducts].map(p => `<img src="${p.image}">`).join('');
         }
 
-        // --- CORE UI ---
+        async function loadAdminData() {
+            const res = await fetch(`${API_BASE}/admin/stats`);
+            const data = await res.json();
+            document.getElementById('revenue-display').innerText = `₹${data.totalRevenue}`;
+            document.getElementById('admin-queries-list').innerHTML = data.queries?.length ? data.queries.map(q => `<div class="query-item"><b>${q.name}</b><br>${q.message}<br><button class="btn-del" onclick="deleteQuery('${q._id}')">DELETE</button></div>`).join('') : "<p>NO QUERIES</p>";
+        }
+
+        async function deleteQuery(id) { await fetch(`${API_BASE}/admin/queries/${id}`, { method: 'DELETE' }); loadAdminData(); }
+        async function sendQuery() { await fetch(`${API_BASE}/contact`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: document.getElementById('q-name').value, email: document.getElementById('q-email').value, message: document.getElementById('q-message').value }) }); showToast("SENT"); }
+        async function uploadProduct() { const f = new FormData(); f.append('name', document.getElementById('p-name').value); f.append('price', document.getElementById('p-price').value); f.append('image', document.getElementById('p-image').files[0]); await fetch(`${API_BASE}/admin/products`, { method: 'POST', body: f }); loadProducts(); }
+        function openAuth(m) { document.getElementById('auth-overlay').style.display = 'flex'; document.getElementById('auth-title').innerText = m; document.getElementById('auth-fields').innerHTML = m === 'SIGNUP' ? `<input id="a-name" placeholder="NAME"><input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASS">` : `<input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASS">`; }
+        function toggleAuth() { openAuth(document.getElementById('auth-title').innerText === 'LOGIN' ? 'SIGNUP' : 'LOGIN'); }
         function toggleSizeModal() { const m = document.getElementById('size-modal'); m.style.display = (m.style.display === 'flex') ? 'none' : 'flex'; }
         function showPage(id) { document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); document.getElementById(id).classList.add('active'); }
-        function toggleCart() { document.getElementById('cart-sidebar').classList.toggle('open'); }
         function showToast(m) { const t = document.getElementById('toast'); t.innerText = m; t.style.display = "block"; setTimeout(() => t.style.display = "none", 3000); }
-        function openAuth(m) {
-            document.getElementById('auth-overlay').style.display = 'flex';
-            document.getElementById('auth-title').innerText = m;
-            document.getElementById('auth-fields').innerHTML = m === 'SIGNUP' ? `<input id="a-name" placeholder="NAME"><input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASS">` : `<input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASS">`;
-        }
-        function toggleAuth() { openAuth(document.getElementById('auth-title').innerText === 'LOGIN' ? 'SIGNUP' : 'LOGIN'); }
 
-        checkVerifyLink();
         loadProducts();
         
-        // --- HERO ANIM ---
         const canvas = document.getElementById("hero-canvas");
         const ctx = canvas.getContext("2d");
         canvas.width = window.innerWidth; canvas.height = window.innerHeight;
