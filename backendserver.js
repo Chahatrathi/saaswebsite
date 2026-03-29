@@ -59,8 +59,11 @@ const Product = mongoose.model('Product', new mongoose.Schema({
 }));
 
 const User = mongoose.model('User', new mongoose.Schema({
-    fullName: String, email: { type: String, unique: true, lowercase: true }, 
-    password: String, role: String
+    fullName: String, 
+    email: { type: String, unique: true, lowercase: true }, 
+    password: String, 
+    role: String,
+    isVerified: { type: Boolean, default: false } // Verified Field
 }));
 
 const Order = mongoose.model('Order', new mongoose.Schema({
@@ -75,145 +78,102 @@ const Query = mongoose.model('Query', new mongoose.Schema({
 
 app.get('/api/status', (req, res) => res.json({ status: "online" }));
 
-// 1. Get All Products
-app.get('/api/products', async (req, res) => {
-    try {
-        const products = await Product.find();
-        res.json(products);
-    } catch (e) { res.status(500).json({ error: "Could not fetch products" }); }
-});
-
-// 2. Auth: Signup
+// 1. Signup with Verification Email
 app.post('/api/signup', async (req, res) => {
     try {
         const { fullName, email, password } = req.body;
         const hashedPassword = await bcrypt.hash(password, 10);
         const role = (email.toLowerCase() === MASTER_ADMIN) ? 'admin' : 'customer';
+        
         const user = new User({ fullName, email: email.toLowerCase(), password: hashedPassword, role });
         await user.save();
-        res.status(201).json({ user: { name: user.fullName, email: user.email, role: user.role } });
+
+        const verifyLink = `${req.headers.origin}/verify?email=${email.toLowerCase()}`;
+        const mailOptions = {
+            from: `ELITE STORE <${process.env.EMAIL_USER}>`,
+            to: email,
+            subject: 'Verify your ELITE Account',
+            html: `<h2>Welcome to ELITE, ${fullName}!</h2>
+                   <p>Please click the link below to verify your email and start shopping:</p>
+                   <a href="${verifyLink}" style="padding:10px 20px; background:#00ff88; color:#000; text-decoration:none; font-weight:bold; display:inline-block;">VERIFY EMAIL</a>`
+        };
+
+        transporter.sendMail(mailOptions);
+        res.status(201).json({ message: "Verification email sent! Check your inbox." });
     } catch (e) { res.status(400).json({ error: "Signup Failed" }); }
 });
 
-// 3. Auth: Login
+// 2. Email Verification Endpoint
+app.post('/api/verify-email', async (req, res) => {
+    try {
+        await User.findOneAndUpdate({ email: req.body.email }, { isVerified: true });
+        res.json({ message: "Account Verified Successfully!" });
+    } catch (e) { res.status(500).json({ error: "Verification Failed" }); }
+});
+
+// 3. Login (Blocked if not verified)
 app.post('/api/login', async (req, res) => {
     try {
         const { email, password } = req.body;
         const user = await User.findOne({ email: email.toLowerCase() });
         if (user && await bcrypt.compare(password, user.password)) {
+            if (!user.isVerified) return res.status(401).json({ error: "Please verify your email first!" });
             res.json({ user: { name: user.fullName, email: user.email, role: user.role } });
         } else { res.status(401).json({ error: "Invalid Credentials" }); }
     } catch (e) { res.status(500).json({ error: "Server Error" }); }
 });
 
-// 4. Contact Route with Email Notification
-app.post('/api/contact', async (req, res) => {
-    try {
-        const { name, email, message } = req.body;
-        const newQuery = new Query({ name, email, message });
-        await newQuery.save();
-
-        const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: MASTER_ADMIN,
-            subject: `🔥 NEW ELITE QUERY: ${name}`,
-            text: `New customer query:\n\nName: ${name}\nEmail: ${email}\nMessage: ${message}`
-        };
-
-        transporter.sendMail(mailOptions, (error, info) => {
-            if (error) console.log("Admin Email Error:", error);
-        });
-
-        res.status(201).json({ message: "Sent" });
-    } catch (e) { res.status(500).json({ error: "Failed" }); }
+// 4. Products & Admin Routes
+app.get('/api/products', async (req, res) => {
+    const products = await Product.find();
+    res.json(products);
 });
 
-// 5. Admin: Dashboard stats
-app.get('/api/admin/stats', async (req, res) => {
-    try {
-        const queries = await Query.find().sort({ date: -1 });
-        const orders = await Order.find();
-        const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
-        res.json({ queries, totalRevenue, orderCount: orders.length });
-    } catch (e) { res.status(500).json({ error: "Fetch failed" }); }
-});
-
-// 6. Admin: Product Upload
 app.post('/api/admin/products', upload.single('image'), async (req, res) => {
-    try {
-        const { name, price } = req.body;
-        const newProduct = new Product({ name, price, image: req.file ? req.file.path : "" });
-        await newProduct.save();
-        res.status(201).json(newProduct);
-    } catch (e) { res.status(500).json({ error: "Upload Failed" }); }
+    const { name, price } = req.body;
+    const newProduct = new Product({ name, price, image: req.file ? req.file.path : "" });
+    await newProduct.save();
+    res.status(201).json(newProduct);
 });
 
-// 7. Admin: Delete Product
 app.delete('/api/admin/products/:id', async (req, res) => {
-    try {
-        await Product.findByIdAndDelete(req.params.id);
-        res.json({ message: "Product deleted" });
-    } catch (e) { res.status(500).json({ error: "Delete failed" }); }
+    await Product.findByIdAndDelete(req.params.id);
+    res.json({ message: "Deleted" });
 });
 
-// 8. Admin: Delete Query
+app.get('/api/admin/stats', async (req, res) => {
+    const queries = await Query.find().sort({ date: -1 });
+    const orders = await Order.find();
+    const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
+    res.json({ queries, totalRevenue, orderCount: orders.length });
+});
+
 app.delete('/api/admin/queries/:id', async (req, res) => {
-    try {
-        await Query.findByIdAndDelete(req.params.id);
-        res.json({ message: "Query deleted" });
-    } catch (e) { res.status(500).json({ error: "Delete failed" }); }
+    await Query.findByIdAndDelete(req.params.id);
+    res.json({ message: "Deleted" });
 });
 
-// 9. Orders: Get History
-app.get('/api/orders/:email', async (req, res) => {
-    try {
-        const orders = await Order.find({ userEmail: req.params.email.toLowerCase() }).sort({ date: -1 });
-        res.json(orders);
-    } catch (e) { res.status(500).json({ error: "Fetch failed" }); }
+// 5. Contact & Payments
+app.post('/api/contact', async (req, res) => {
+    const { name, email, message } = req.body;
+    await new Query({ name, email, message }).save();
+    res.status(201).json({ message: "Sent" });
 });
 
-// 10. Payments: Stripe Route with Confirmation Email
 app.post('/api/create-checkout-session', async (req, res) => {
-    try {
-        const { items, userEmail } = req.body;
-        const totalAmount = items.reduce((sum, i) => sum + (i.price * i.quantity), 0);
-        
-        const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
-            billing_address_collection: 'required', 
-            shipping_address_collection: { allowed_countries: ['IN'] },
-            line_items: items.map(i => ({
-                price_data: { 
-                    currency: 'inr', 
-                    product_data: { name: `${i.name} (${i.size})` }, 
-                    unit_amount: i.price * 100 
-                },
-                quantity: i.quantity || 1,
-            })),
-            mode: 'payment',
-            customer_email: userEmail,
-            success_url: `${req.headers.origin}/?payment=success`,
-            cancel_url: `${req.headers.origin}/?payment=cancel`,
-        });
-
-        const newOrder = new Order({ userEmail: userEmail.toLowerCase(), items, total: totalAmount });
-        await newOrder.save();
-
-        const itemDetails = items.map(i => `- ${i.name} (${i.size}) x${i.quantity || 1}`).join('\n');
-        
-        const customerMailOptions = {
-            from: `ELITE STORE <${process.env.EMAIL_USER}>`,
-            to: userEmail,
-            subject: `Order Confirmed! Your ELITE Gear is on the way 📦`,
-            text: `Hi! \n\nThank you for shopping with ELITE. Your order has been successfully placed.\n\nSummary:\n${itemDetails}\n\nTotal Paid: ₹${totalAmount}\n\nStay Elite,\nChahat Rathi`
-        };
-
-        transporter.sendMail(customerMailOptions, (error, info) => {
-            if (error) console.log("Confirmation Email Error:", error);
-        });
-
-        res.json({ id: session.id });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    const { items, userEmail } = req.body;
+    const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: items.map(i => ({
+            price_data: { currency: 'inr', product_data: { name: i.name }, unit_amount: i.price * 100 },
+            quantity: i.quantity || 1,
+        })),
+        mode: 'payment',
+        customer_email: userEmail,
+        success_url: `${req.headers.origin}/?payment=success`,
+        cancel_url: `${req.headers.origin}/?payment=cancel`,
+    });
+    res.json({ id: session.id });
 });
 
 const PORT = process.env.PORT || 5000;
