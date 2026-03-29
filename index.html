@@ -133,7 +133,8 @@
             <h2 id="auth-title">LOGIN</h2>
             <div id="auth-fields"></div>
             <button class="btn-prime" onclick="submitAuth()">CONTINUE</button>
-            <p onclick="toggleAuth()" style="font-size:10px; margin-top:20px; cursor:pointer;">SIGNUP</p>
+            <p id="resend-msg" onclick="resendVerification()" style="display:none; color:var(--green); font-size:10px; margin-top:15px; cursor:pointer; text-decoration: underline;">Resend Verification Email?</p>
+            <p onclick="toggleAuth()" style="font-size:10px; margin-top:20px; cursor:pointer; opacity: 0.5;">SIGNUP</p>
         </div>
     </div>
 
@@ -172,7 +173,24 @@
                 document.getElementById('cart-link').style.display = isAdmin ? 'none' : 'inline-block';
                 document.getElementById('contact-link').style.display = isAdmin ? 'none' : 'inline-block';
                 loadProducts(); showToast("LOGGED IN");
-            } else { alert(data.error); }
+            } else { 
+                alert(data.error); 
+                if(data.error.toLowerCase().includes("verify")) {
+                    document.getElementById('resend-msg').style.display = "block";
+                }
+            }
+        }
+
+        async function resendVerification() {
+            const email = document.getElementById('a-email').value;
+            if(!email) return alert("Enter your email first!");
+            const res = await fetch(`${API_BASE}/resend-verification`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ email })
+            });
+            const data = await res.json();
+            alert(data.message || data.error);
         }
 
         async function checkVerifyLink() {
@@ -189,6 +207,13 @@
                 document.getElementById('verify-msg').innerText = data.message || data.error;
                 window.history.pushState({}, document.title, "/");
             }
+        }
+
+        function toggleAuth() { 
+            const title = document.getElementById('auth-title');
+            const resend = document.getElementById('resend-msg');
+            resend.style.display = "none";
+            openAuth(title.innerText === 'LOGIN' ? 'SIGNUP' : 'LOGIN'); 
         }
 
         function logout() {
@@ -264,7 +289,41 @@
             document.getElementById('auth-title').innerText = m;
             document.getElementById('auth-fields').innerHTML = m === 'SIGNUP' ? `<input id="a-name" placeholder="NAME"><input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASS">` : `<input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASS">`;
         }
-        function toggleAuth() { openAuth(document.getElementById('auth-title').innerText === 'LOGIN' ? 'SIGNUP' : 'LOGIN'); }
+        async function checkoutCart() {
+            if (!loggedUser) return openAuth('LOGIN');
+            const res = await fetch(`${API_BASE}/create-checkout-session`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userEmail: loggedUser.email, items: cart })
+            });
+            const session = await res.json(); stripe.redirectToCheckout({ sessionId: session.id });
+        }
+        async function uploadProduct() {
+            const formData = new FormData();
+            formData.append('name', document.getElementById('p-name').value);
+            formData.append('price', document.getElementById('p-price').value);
+            formData.append('image', document.getElementById('p-image').files[0]);
+            await fetch(`${API_BASE}/admin/products`, { method: 'POST', body: formData });
+            showToast("UPLOADED"); loadProducts();
+        }
+        function addToCart(id, name, price, image, btn) {
+            const size = btn.parentElement.querySelector('.size-btn.selected')?.innerText;
+            if(!size) return alert("SELECT SIZE!");
+            cart.push({ id, name, price, image, size, quantity: 1 });
+            document.getElementById('cart-count').innerText = cart.length;
+            updateCartUI(); showToast("ADDED");
+        }
+        function updateCartUI() {
+            const list = document.getElementById('cart-items');
+            let total = cart.reduce((sum, item) => sum + item.price, 0);
+            list.innerHTML = cart.map(item => `<div style="font-size:10px; margin-bottom:10px;">${item.name} (${item.size}) - ₹${item.price}</div>`).join('');
+            document.getElementById('cart-total').innerText = `TOTAL: ₹${total}`;
+        }
+        async function sendQuery() {
+            const body = { name: document.getElementById('q-name').value, email: document.getElementById('q-email').value, message: document.getElementById('q-message').value };
+            await fetch(`${API_BASE}/contact`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+            showToast("SENT"); document.getElementById('q-message').value = "";
+        }
 
         // --- INIT ---
         checkVerifyLink();
