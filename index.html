@@ -38,14 +38,6 @@
         .stat-card { background: #111; border: 1px solid var(--green); padding: 20px; margin-bottom: 20px; text-align: center; border-radius: 5px; }
         .query-item { background: #0a0a0a; border-bottom: 1px solid #222; padding: 10px; font-size: 11px; margin-bottom: 10px; text-align: left;}
         
-        .filter-bar { display: flex; gap: 10px; margin-bottom: 30px; overflow-x: auto; padding-bottom: 10px; }
-        .filter-btn { background: #111; border: 1px solid #333; color: #fff; padding: 8px 15px; font-size: 10px; cursor: pointer; white-space: nowrap; }
-        .filter-btn.active { border-color: var(--green); color: var(--green); }
-
-        .size-btn { background: #111; border: 1px solid #333; color: #fff; padding: 8px 12px; cursor: pointer; font-size: 10px; margin-right: 5px; }
-        .size-btn.selected { border-color: var(--green); color: var(--green); }
-
-        /* SIZE CHART MODAL */
         #size-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 6000; display: none; align-items: center; justify-content: center; padding: 20px; }
         .size-content { background: #0a0a0a; border: 1px solid #222; padding: 40px; width: 100%; max-width: 500px; text-align: center; }
         table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px; }
@@ -60,7 +52,6 @@
     <div id="size-modal">
         <div class="size-content">
             <h2 style="letter-spacing: 5px; margin-bottom: 10px;">SIZE GUIDE</h2>
-            <p style="font-size: 10px; opacity: 0.5; margin-bottom: 20px;">Measurements in Inches</p>
             <table>
                 <tr><th>SIZE</th><th>CHEST</th><th>LENGTH</th></tr>
                 <tr><td>S</td><td>42</td><td>27</td></tr>
@@ -70,14 +61,6 @@
             </table>
             <button class="btn-prime" onclick="toggleSizeModal()">CLOSE</button>
         </div>
-    </div>
-
-    <div id="cart-sidebar">
-        <h2 style="letter-spacing:5px; margin-bottom:30px;">CART</h2>
-        <div id="cart-items"></div>
-        <div id="cart-total" style="border-top:1px solid #222; padding-top:20px; font-weight:bold; margin-top: 20px;">TOTAL: ₹0</div>
-        <button class="btn-prime" onclick="checkoutCart()">CHECKOUT VIA STRIPE</button>
-        <button onclick="toggleCart()" style="background:none; border:none; color:#555; margin-top:20px; cursor:pointer; width:100%;">CLOSE</button>
     </div>
 
     <nav>
@@ -105,13 +88,7 @@
 
     <div id="store-page" class="page">
         <input type="text" id="store-search" placeholder="SEARCH COLLECTION..." onkeyup="filterProducts()">
-        <div class="filter-bar">
-            <button class="filter-btn active" onclick="setCategory('ALL', this)">ALL</button>
-            <button class="filter-btn" onclick="setCategory('T-SHIRT', this)">T-SHIRTS</button>
-            <button class="filter-btn" onclick="setCategory('HOODIE', this)">HOODIES</button>
-            <button class="filter-btn" onclick="setCategory('PANTS', this)">PANTS</button>
-        </div>
-        <div id="product-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:30px;"></div>
+        <div id="product-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:30px; margin-top: 20px;"></div>
     </div>
 
     <div id="contact-page" class="page">
@@ -132,7 +109,7 @@
         <div style="max-width:1000px; margin: 0 auto; display:grid; grid-template-columns: 1fr 1fr; gap:50px;">
             <div>
                 <h3>ADD PRODUCT</h3>
-                <input type="text" id="p-name" placeholder="NAME (e.g. ELITE Oversized T-Shirt)">
+                <input type="text" id="p-name" placeholder="NAME">
                 <input type="number" id="p-price" placeholder="PRICE">
                 <input type="file" id="p-image" accept="image/*">
                 <button class="btn-prime" onclick="uploadProduct()">UPLOAD</button>
@@ -141,6 +118,13 @@
                 <h3>CUSTOMER QUERIES</h3>
                 <div id="admin-queries-list"></div>
             </div>
+        </div>
+    </div>
+
+    <div id="verify-page" class="page">
+        <div style="max-width:400px; margin:0 auto; text-align:center; background:#0a0a0a; padding:40px; border:1px solid var(--green);">
+            <h2 id="verify-msg">VERIFYING ACCOUNT...</h2>
+            <button class="btn-prime" onclick="showPage('home-page')" style="margin-top:20px;">GO HOME</button>
         </div>
     </div>
 
@@ -159,19 +143,64 @@
         let loggedUser = null;
         let cart = [];
         let allProducts = [];
-        let currentCategory = 'ALL';
 
-        function toggleSizeModal() {
-            const m = document.getElementById('size-modal');
-            m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
+        // --- AUTH & VERIFICATION ---
+        async function submitAuth() {
+            const mode = document.getElementById('auth-title').innerText.toLowerCase();
+            const res = await fetch(`${API_BASE}/${mode}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ 
+                    email: document.getElementById('a-email').value, 
+                    password: document.getElementById('a-pass').value, 
+                    fullName: document.getElementById('a-name')?.value 
+                })
+            });
+            const data = await res.json();
+            if(res.ok) {
+                if(mode === 'signup') {
+                    alert(data.message);
+                    document.getElementById('auth-overlay').style.display = 'none';
+                    return;
+                }
+                loggedUser = data.user;
+                document.getElementById('auth-overlay').style.display = 'none';
+                document.getElementById('auth-trigger').innerText = (loggedUser.name || loggedUser.fullName).toUpperCase();
+                document.getElementById('logout-link').style.display = 'inline-block';
+                const isAdmin = loggedUser.email === "chahat.rathi1@gmail.com";
+                document.getElementById('admin-link').style.display = isAdmin ? 'inline-block' : 'none';
+                document.getElementById('cart-link').style.display = isAdmin ? 'none' : 'inline-block';
+                document.getElementById('contact-link').style.display = isAdmin ? 'none' : 'inline-block';
+                loadProducts(); showToast("LOGGED IN");
+            } else { alert(data.error); }
         }
 
-        function showPage(id) {
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
-            document.getElementById('hero-canvas').style.opacity = (id === 'home-page') ? '1' : '0.1';
+        async function checkVerifyLink() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const emailToVerify = urlParams.get('email');
+            if(window.location.pathname.includes('/verify') || emailToVerify) {
+                showPage('verify-page');
+                const res = await fetch(`${API_BASE}/verify-email`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ email: emailToVerify })
+                });
+                const data = await res.json();
+                document.getElementById('verify-msg').innerText = data.message || data.error;
+                window.history.pushState({}, document.title, "/");
+            }
         }
 
+        function logout() {
+            loggedUser = null;
+            document.getElementById('auth-trigger').innerText = "ACCOUNT";
+            document.getElementById('logout-link').style.display = 'none';
+            document.getElementById('admin-link').style.display = 'none';
+            document.getElementById('contact-link').style.display = 'inline-block';
+            showPage('home-page'); showToast("LOGGED OUT");
+        }
+
+        // --- STORE & ADMIN ---
         async function loadAdminData() {
             try {
                 const res = await fetch(`${API_BASE}/admin/stats`);
@@ -189,8 +218,8 @@
 
         async function deleteQuery(id) {
             if(!confirm("Delete query?")) return;
-            await fetch(`${API_BASE}/admin/queries/${id}`, { method: 'DELETE' });
-            showToast("DELETED"); loadAdminData();
+            const res = await fetch(`${API_BASE}/admin/queries/${id}`, { method: 'DELETE' });
+            if(res.ok) { showToast("DELETED"); await loadAdminData(); }
         }
 
         function displayProducts(products) {
@@ -211,28 +240,6 @@
             `).join('');
         }
 
-        function selectSize(btn) {
-            btn.parentElement.querySelectorAll('.size-btn').forEach(b => b.classList.remove('selected'));
-            btn.classList.add('selected');
-        }
-
-        function filterProducts() {
-            const term = document.getElementById('store-search').value.toLowerCase();
-            const filtered = allProducts.filter(p => {
-                const matchName = p.name.toLowerCase().includes(term);
-                const matchCat = currentCategory === 'ALL' || p.name.toUpperCase().includes(currentCategory);
-                return matchName && matchCat;
-            });
-            displayProducts(filtered);
-        }
-
-        function setCategory(cat, btn) {
-            currentCategory = cat;
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            filterProducts();
-        }
-
         async function loadProducts() {
             const res = await fetch(`${API_BASE}/products`);
             allProducts = await res.json();
@@ -241,81 +248,27 @@
             if(track) track.innerHTML = [...allProducts, ...allProducts].map(p => `<img src="${p.image}">`).join('');
         }
 
-        function addToCart(id, name, price, image, btn) {
-            const size = btn.parentElement.querySelector('.size-btn.selected')?.innerText;
-            if(!size) return alert("SELECT SIZE!");
-            cart.push({ id, name, price, image, size, quantity: 1 });
-            document.getElementById('cart-count').innerText = cart.length;
-            updateCartUI();
-            showToast("ADDED");
+        // --- CORE UI HELPERS ---
+        function toggleSizeModal() {
+            const m = document.getElementById('size-modal');
+            m.style.display = (m.style.display === 'flex') ? 'none' : 'flex';
         }
-
-        function updateCartUI() {
-            const list = document.getElementById('cart-items');
-            let total = cart.reduce((sum, item) => sum + item.price, 0);
-            list.innerHTML = cart.map(item => `<div style="font-size:10px; margin-bottom:10px;">${item.name} (${item.size}) - ₹${item.price}</div>`).join('');
-            document.getElementById('cart-total').innerText = `TOTAL: ₹${total}`;
+        function selectSize(btn) {
+            btn.parentElement.querySelectorAll('.size-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
         }
-
-        // --- AUTH & MISC ---
-        async function submitAuth() {
-            const mode = document.getElementById('auth-title').innerText.toLowerCase();
-            const res = await fetch(`${API_BASE}/${mode}`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ email: document.getElementById('a-email').value, password: document.getElementById('a-pass').value, fullName: document.getElementById('a-name')?.value })
-            });
-            const data = await res.json();
-            if(res.ok) {
-                loggedUser = data.user;
-                document.getElementById('auth-overlay').style.display = 'none';
-                document.getElementById('auth-trigger').innerText = (loggedUser.name || loggedUser.fullName).toUpperCase();
-                document.getElementById('logout-link').style.display = 'inline-block';
-                const isAdmin = loggedUser.email === "chahat.rathi1@gmail.com";
-                document.getElementById('admin-link').style.display = isAdmin ? 'inline-block' : 'none';
-                document.getElementById('cart-link').style.display = isAdmin ? 'none' : 'inline-block';
-                loadProducts(); showToast("LOGGED IN");
-            }
-        }
-
-        function logout() {
-            loggedUser = null;
-            document.getElementById('auth-trigger').innerText = "ACCOUNT";
-            document.getElementById('logout-link').style.display = 'none';
-            document.getElementById('admin-link').style.display = 'none';
-            showPage('home-page'); showToast("LOGGED OUT");
-        }
-
-        async function checkoutCart() {
-            if (!loggedUser) return openAuth('LOGIN');
-            const res = await fetch(`${API_BASE}/create-checkout-session`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userEmail: loggedUser.email, items: cart }) });
-            const session = await res.json();
-            stripe.redirectToCheckout({ sessionId: session.id });
-        }
-
-        async function uploadProduct() {
-            const formData = new FormData();
-            formData.append('name', document.getElementById('p-name').value);
-            formData.append('price', document.getElementById('p-price').value);
-            formData.append('image', document.getElementById('p-image').files[0]);
-            await fetch(`${API_BASE}/admin/products`, { method: 'POST', body: formData });
-            showToast("UPLOADED"); loadProducts();
-        }
-
+        function toggleCart() { document.getElementById('cart-sidebar').classList.toggle('open'); }
+        function showToast(m) { const t = document.getElementById('toast'); t.innerText = m; t.style.display = "block"; setTimeout(() => t.style.display = "none", 3000); }
         function openAuth(m) {
             document.getElementById('auth-overlay').style.display = 'flex';
             document.getElementById('auth-title').innerText = m;
             document.getElementById('auth-fields').innerHTML = m === 'SIGNUP' ? `<input id="a-name" placeholder="NAME"><input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASS">` : `<input id="a-email" placeholder="EMAIL"><input type="password" id="a-pass" placeholder="PASS">`;
         }
         function toggleAuth() { openAuth(document.getElementById('auth-title').innerText === 'LOGIN' ? 'SIGNUP' : 'LOGIN'); }
-        function showToast(m) { const t = document.getElementById('toast'); t.innerText = m; t.style.display = "block"; setTimeout(() => t.style.display = "none", 3000); }
-        function toggleCart() { document.getElementById('cart-sidebar').classList.toggle('open'); }
-        async function sendQuery() {
-            const body = { name: document.getElementById('q-name').value, email: document.getElementById('q-email').value, message: document.getElementById('q-message').value };
-            await fetch(`${API_BASE}/contact`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
-            showToast("SENT"); document.getElementById('q-message').value = "";
-        }
 
+        // --- INIT ---
+        checkVerifyLink();
+        loadProducts();
         const canvas = document.getElementById("hero-canvas");
         const ctx = canvas.getContext("2d");
         canvas.width = window.innerWidth; canvas.height = window.innerHeight;
@@ -333,7 +286,7 @@
         }
         images[0].onload = anim;
         async function checkStatus() { try { const res = await fetch(`${API_BASE}/status`); if(res.ok) document.getElementById('status-dot').classList.add('online'); } catch(e) {} }
-        checkStatus(); loadProducts();
+        checkStatus();
     </script>
 </body>
 </html>
