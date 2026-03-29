@@ -11,7 +11,7 @@ const nodemailer = require('nodemailer');
 
 const app = express();
 
-// --- UPDATED CORS CONFIGURATION ---
+// --- CORS CONFIGURATION ---
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'DELETE', 'UPDATE', 'PUT', 'PATCH'],
@@ -27,7 +27,7 @@ const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
         user: process.env.EMAIL_USER, 
-        pass: process.env.EMAIL_PASS // Use a Google "App Password" here
+        pass: process.env.EMAIL_PASS 
     }
 });
 
@@ -106,7 +106,7 @@ app.post('/api/login', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Server Error" }); }
 });
 
-// 4. Contact Route with Admin Email Notification
+// 4. Contact Route with Email Notification
 app.post('/api/contact', async (req, res) => {
     try {
         const { name, email, message } = req.body;
@@ -156,7 +156,15 @@ app.delete('/api/admin/products/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Delete failed" }); }
 });
 
-// 8. Orders: Get History
+// 8. Admin: Delete Query
+app.delete('/api/admin/queries/:id', async (req, res) => {
+    try {
+        await Query.findByIdAndDelete(req.params.id);
+        res.json({ message: "Query deleted" });
+    } catch (e) { res.status(500).json({ error: "Delete failed" }); }
+});
+
+// 9. Orders: Get History
 app.get('/api/orders/:email', async (req, res) => {
     try {
         const orders = await Order.find({ userEmail: req.params.email.toLowerCase() }).sort({ date: -1 });
@@ -164,7 +172,7 @@ app.get('/api/orders/:email', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Fetch failed" }); }
 });
 
-// 9. Payments: Stripe Route with Customer Order Confirmation Email
+// 10. Payments: Stripe Route with Confirmation Email
 app.post('/api/create-checkout-session', async (req, res) => {
     try {
         const { items, userEmail } = req.body;
@@ -188,23 +196,20 @@ app.post('/api/create-checkout-session', async (req, res) => {
             cancel_url: `${req.headers.origin}/?payment=cancel`,
         });
 
-        // Save the order to DB
         const newOrder = new Order({ userEmail: userEmail.toLowerCase(), items, total: totalAmount });
         await newOrder.save();
 
-        // SEND ORDER CONFIRMATION EMAIL TO CUSTOMER
         const itemDetails = items.map(i => `- ${i.name} (${i.size}) x${i.quantity || 1}`).join('\n');
         
         const customerMailOptions = {
             from: `ELITE STORE <${process.env.EMAIL_USER}>`,
             to: userEmail,
             subject: `Order Confirmed! Your ELITE Gear is on the way 📦`,
-            text: `Hi! \n\nThank you for shopping with ELITE. Your order has been successfully placed.\n\nOrder Summary:\n${itemDetails}\n\nTotal Paid: ₹${totalAmount}\n\nWe will notify you once your package ships!\n\nStay Elite,\nChahat Rathi`
+            text: `Hi! \n\nThank you for shopping with ELITE. Your order has been successfully placed.\n\nSummary:\n${itemDetails}\n\nTotal Paid: ₹${totalAmount}\n\nStay Elite,\nChahat Rathi`
         };
 
         transporter.sendMail(customerMailOptions, (error, info) => {
-            if (error) console.log("Customer Email Error:", error);
-            else console.log("Customer Confirmation Sent:", info.response);
+            if (error) console.log("Confirmation Email Error:", error);
         });
 
         res.json({ id: session.id });
