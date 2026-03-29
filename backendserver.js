@@ -9,7 +9,14 @@ const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const multer = require('multer');
 
 const app = express();
-app.use(cors());
+
+// --- UPDATED CORS CONFIGURATION ---
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'DELETE', 'UPDATE', 'PUT', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
 
 const MASTER_ADMIN = "chahat.rathi1@gmail.com";
@@ -123,13 +130,21 @@ app.get('/api/admin/stats', async (req, res) => {
 app.post('/api/admin/products', upload.single('image'), async (req, res) => {
     try {
         const { name, price } = req.body;
-        const newProduct = new Product({ name, price, image: req.file.path });
+        const newProduct = new Product({ name, price, image: req.file ? req.file.path : "" });
         await newProduct.save();
         res.status(201).json(newProduct);
     } catch (e) { res.status(500).json({ error: "Upload Failed" }); }
 });
 
-// 7. Orders: Get History for Invoices
+// 7. Admin: Delete Product (Added for your Inventory management)
+app.delete('/api/admin/products/:id', async (req, res) => {
+    try {
+        await Product.findByIdAndDelete(req.params.id);
+        res.json({ message: "Product deleted" });
+    } catch (e) { res.status(500).json({ error: "Delete failed" }); }
+});
+
+// 8. Orders: Get History for Invoices
 app.get('/api/orders/:email', async (req, res) => {
     try {
         const orders = await Order.find({ userEmail: req.params.email.toLowerCase() }).sort({ date: -1 });
@@ -137,7 +152,7 @@ app.get('/api/orders/:email', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Fetch failed" }); }
 });
 
-// 8. Payments: Stripe Route with mandatory India compliance
+// 9. Payments: Stripe Route with mandatory India compliance
 app.post('/api/create-checkout-session', async (req, res) => {
     try {
         const { items, userEmail } = req.body;
@@ -166,5 +181,5 @@ app.post('/api/create-checkout-session', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => console.log(`🚀 ELITE API Live on ${PORT}`));
