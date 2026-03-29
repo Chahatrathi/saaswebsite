@@ -28,7 +28,7 @@
         #cart-sidebar.open { right: 0; }
         
         .btn-prime { width: 100%; padding: 15px; background: #fff; color: #000; border: none; font-weight: 900; cursor: pointer; font-size: 10px; margin-top: 10px; }
-        .btn-del { background: var(--red); color: #fff; font-size: 8px; padding: 5px; width: auto; margin-top: 5px; cursor: pointer; }
+        .btn-del { background: var(--red); color: #fff; font-size: 8px; padding: 5px; width: auto; margin-top: 5px; cursor: pointer; border: none; }
 
         input, select, textarea { width: 100%; padding: 15px; margin-bottom: 10px; background: rgba(255,255,255,0.05); border: 1px solid #333; color: #fff; outline: none; }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); display: inline-block; margin-left: 5px; }
@@ -43,6 +43,14 @@
         table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px; }
         th, td { border: 1px solid #333; padding: 12px; text-align: center; }
         th { background: #111; color: var(--green); }
+
+        .size-btn { background: #000; border: 1px solid #333; color: #fff; padding: 5px 10px; cursor: pointer; font-size: 10px; transition: 0.3s; }
+        .size-btn.selected { border-color: var(--green); color: var(--green); }
+
+        /* Cart Item Styling */
+        .cart-item-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #222; }
+        .btn-remove { background: none; border: 1px solid var(--red); color: var(--red); font-size: 8px; padding: 2px 5px; cursor: pointer; }
+        .btn-remove:hover { background: var(--red); color: #fff; }
     </style>
 </head>
 <body>
@@ -191,13 +199,60 @@
         function displayProducts(products) {
             const isOwner = loggedUser && loggedUser.email === "chahat.rathi1@gmail.com";
             document.getElementById('product-grid').innerHTML = products.map(p => `
-                <div style="background:#111; padding:20px; border:1px solid #222;">
-                    <img src="${p.image}" style="width:100%; height:250px; object-fit:cover;">
-                    <h3>${p.name.toUpperCase()}</h3>
-                    <p style="color:var(--green)">₹${p.price}</p>
-                    ${!isOwner ? `<button class="btn-prime" onclick="addToCart('${p._id}', '${p.name}', ${p.price})">ADD TO CART</button>` : `<p style="font-size:10px; opacity:0.5;">ADMIN VIEW</p>`}
+                <div style="background:#111; padding:20px; border:1px solid #222; text-align:center;">
+                    <img src="${p.image}" style="width:100%; height:250px; object-fit:cover; margin-bottom:15px;" onerror="this.src='https://via.placeholder.com/250'">
+                    <h3 style="letter-spacing:2px;">${p.name.toUpperCase()}</h3>
+                    <p style="color:var(--green); font-weight:bold; margin: 10px 0;">₹${p.price}</p>
+                    ${!isOwner ? `
+                        <div class="size-selector" style="margin-bottom:15px; display:flex; justify-content:center; gap:5px;">
+                            ${['S','M','L','XL'].map(s => `<button class="size-btn" onclick="selectSize(this)">${s}</button>`).join('')}
+                        </div>
+                        <button class="btn-prime" onclick="addToCart('${p._id}', '${p.name}', ${p.price}, '${p.image}', this)">ADD TO CART</button>
+                    ` : `<p style="font-size:10px; opacity:0.5; border-top:1px solid #222; pt-10px;">ADMIN VIEW</p>`}
                 </div>
             `).join('');
+        }
+
+        function selectSize(btn) {
+            btn.parentElement.querySelectorAll('.size-btn').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+        }
+
+        function addToCart(id, name, price, image, btn) {
+            const selectedSizeBtn = btn.parentElement.querySelector('.size-btn.selected');
+            if(!selectedSizeBtn) return alert("PLEASE SELECT A SIZE FIRST!");
+
+            const size = selectedSizeBtn.innerText;
+            // Generate a temporary unique ID for front-end removal
+            const tempId = Date.now() + Math.random();
+            cart.push({ id, tempId, name, price, image, size, quantity: 1 });
+            updateCartUI();
+            showToast("ADDED TO CART");
+        }
+
+        // NEW: REMOVE FROM CART
+        function removeFromCart(tempId) {
+            cart = cart.filter(item => item.tempId !== tempId);
+            updateCartUI();
+            showToast("REMOVED");
+        }
+
+        function updateCartUI() {
+            const list = document.getElementById('cart-items');
+            document.getElementById('cart-count').innerText = cart.length;
+            let total = cart.reduce((sum, item) => sum + item.price, 0);
+            
+            list.innerHTML = cart.map(item => `
+                <div class="cart-item-row">
+                    <div style="font-size:10px;">
+                        <b>${item.name}</b><br>
+                        Size: ${item.size} - ₹${item.price}
+                    </div>
+                    <button class="btn-remove" onclick="removeFromCart(${item.tempId})">REMOVE</button>
+                </div>
+            `).join('');
+            
+            document.getElementById('cart-total').innerText = `TOTAL: ₹${total}`;
         }
 
         async function loadProducts() {
