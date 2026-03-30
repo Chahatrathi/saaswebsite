@@ -35,12 +35,13 @@
         .size-btn { background: #000; border: 1px solid #333; color: #fff; padding: 5px 10px; cursor: pointer; font-size: 10px; transition: 0.3s; }
         .size-btn.selected { border-color: var(--green); color: var(--green); }
 
-        /* Admin Table Styling */
+        /* Admin Dashboard Styles */
         .admin-table { width: 100%; border-collapse: collapse; font-size: 9px; margin-top: 20px; background: #050505; }
         .admin-table th, .admin-table td { padding: 10px; text-align: left; border-bottom: 1px solid #222; }
-        .admin-table th { color: var(--green); text-transform: uppercase; }
-        .shipped-row { opacity: 0.3; }
-        .btn-ship { background: var(--green); color: #000; font-size: 7px; padding: 3px 6px; border: none; cursor: pointer; font-weight: bold; }
+        .admin-table th { color: var(--green); text-transform: uppercase; letter-spacing: 1px; }
+        .shipped-row { opacity: 0.35; filter: grayscale(1); transition: 0.5s; }
+        .btn-ship { background: var(--green); color: #000; font-size: 7px; padding: 4px 8px; border: none; cursor: pointer; font-weight: bold; text-transform: uppercase; }
+        .btn-ship:disabled { background: #333; color: #666; cursor: default; }
     </style>
 </head>
 <body>
@@ -105,9 +106,9 @@
             <div>
                 <h3>ADD PRODUCT</h3>
                 <input id="p-name" placeholder="NAME">
-                <input type="number" id="p-price" placeholder="PRICE">
-                <input type="file" id="p-image" accept="image/*">
-                <button class="btn-prime" onclick="uploadProduct()">UPLOAD</button>
+                <input id="p-price" type="number" placeholder="PRICE">
+                <input id="p-image" type="file" accept="image/*">
+                <button class="btn-prime" onclick="uploadProduct()">UPLOAD PRODUCT</button>
                 
                 <h3 style="margin-top:40px;">QUERIES</h3>
                 <div id="admin-queries-list"></div>
@@ -132,7 +133,7 @@
         const stripe = Stripe('pk_test_51TGFqzEvRNYv35zvMRUZZZ67MAw9wYzSSU7jcz8yRDSAhyXVYSr8lZ0sGXlJoMnj6PqrvBa3KiIvqHTIayDenHjd00ag4jevWd'); 
         let loggedUser = null; let cart = []; let discount = 0;
 
-        // --- AUTH & NAVBAR ---
+        // --- AUTH ---
         async function submitAuth() {
             const mode = document.getElementById('auth-title').innerText.toLowerCase();
             const res = await fetch(`${API_BASE}/${mode}`, { 
@@ -177,26 +178,41 @@
                     <table class="admin-table">
                         <tr><th>Customer</th><th>Total</th><th>Items</th><th>Action</th></tr>
                         ${data.orders.map(o => `
-                            <tr id="row-${o._id}">
+                            <tr id="order-${o._id}">
                                 <td>${o.userEmail}</td>
                                 <td>₹${o.total}</td>
                                 <td>${o.items.map(i=>i.name).join(', ')}</td>
-                                <td><button class="btn-ship" onclick="markShipped('${o._id}', this)">MARK SHIPPED</button></td>
+                                <td><button class="btn-ship" onclick="markShipped('${o._id}', this)">Mark Shipped</button></td>
                             </tr>`).join('')}
                     </table>` : "<p>No orders yet</p>";
             } catch(e) { console.error(e); }
         }
 
         function markShipped(id, btn) {
-            document.getElementById('row-' + id).classList.add('shipped-row');
+            const row = document.getElementById('order-' + id);
+            if(row) row.classList.add('shipped-row');
             btn.innerText = "SHIPPED";
             btn.disabled = true;
-            btn.style.background = "#333";
-            btn.style.color = "#fff";
-            showToast("ORDER MARKED AS SHIPPED");
+            showToast("ORDER FULFILLED");
         }
 
-        // --- CART & STRIPE ---
+        // --- CORE FUNCTIONS ---
+        async function uploadProduct() {
+            const name = document.getElementById('p-name').value;
+            const price = document.getElementById('p-price').value;
+            const imageFile = document.getElementById('p-image').files[0];
+            const btn = event.target;
+            if (!name || !price || !imageFile) return alert("FILL ALL FIELDS!");
+            btn.innerText = "UPLOADING..."; btn.disabled = true;
+            const formData = new FormData();
+            formData.append('name', name); formData.append('price', price); formData.append('image', imageFile);
+            try {
+                const res = await fetch(`${API_BASE}/admin/products`, { method: 'POST', body: formData });
+                if (res.ok) { showToast("PRODUCT ADDED"); loadProducts(); }
+            } catch (e) { alert("UPLOAD ERROR"); }
+            btn.innerText = "UPLOAD PRODUCT"; btn.disabled = false;
+        }
+
         function updateCartUI() {
             const list = document.getElementById('cart-items');
             document.getElementById('cart-count').innerText = cart.length;
@@ -223,7 +239,6 @@
             } catch (e) { btn.innerText = "CHECKOUT VIA STRIPE"; btn.disabled = false; }
         }
 
-        // --- UTILS ---
         async function loadProducts() {
             const res = await fetch(`${API_BASE}/products`); allProducts = await res.json();
             const isAdmin = loggedUser && loggedUser.email === "chahat.rathi1@gmail.com";
@@ -237,22 +252,6 @@
                     ` : `<p style="font-size:10px; opacity:0.5; margin-top:20px; border-top:1px solid #333; pt-10px;">ADMIN PREVIEW</p>`}
                 </div>`).join('');
         }
-
-        function addToCart(id, name, price, image, btn) {
-            const szBtn = btn.parentElement.querySelector('.size-btn.selected');
-            if(!szBtn) return alert("SELECT SIZE!");
-            cart.push({ id, tempId: Math.random().toString(36).substr(2,9), name, price, image, size: szBtn.innerText });
-            updateCartUI(); showToast("ADDED");
-        }
-        function removeFromCart(tid) { cart = cart.filter(i => i.tempId !== tid); updateCartUI(); }
-        function applyPromo() { const code = document.getElementById('promo-input').value.toUpperCase(); discount = (code === "ELITE10") ? 0.10 : 0; updateCartUI(); }
-        async function deleteQuery(id) { await fetch(`${API_BASE}/admin/queries/${id}`, { method: 'DELETE' }); loadAdminData(); }
-        async function sendQuery() { 
-            const btn = document.getElementById('query-btn'); btn.innerText = "SENDING..."; btn.disabled = true;
-            await fetch(`${API_BASE}/contact`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: document.getElementById('q-name').value, email: document.getElementById('q-email').value, message: document.getElementById('q-message').value }) });
-            btn.innerText = "SEND QUERY"; btn.disabled = false; showToast("SENT");
-        }
-        async function uploadProduct() { const f = new FormData(); f.append('name', document.getElementById('p-name').value); f.append('price', document.getElementById('p-price').value); f.append('image', document.getElementById('p-image').files[0]); await fetch(`${API_BASE}/admin/products`, { method: 'POST', body: f }); loadProducts(); }
 
         const canvas = document.getElementById("hero-canvas");
         const ctx = canvas.getContext("2d");
@@ -270,6 +269,21 @@
             idx += 0.15; requestAnimationFrame(anim);
         }
         requestAnimationFrame(anim);
+
+        function addToCart(id, name, price, image, btn) {
+            const szBtn = btn.parentElement.querySelector('.size-btn.selected');
+            if(!szBtn) return alert("SELECT SIZE!");
+            cart.push({ id, tempId: Math.random().toString(36).substr(2,9), name, price, image, size: szBtn.innerText });
+            updateCartUI(); showToast("ADDED");
+        }
+        function removeFromCart(tid) { cart = cart.filter(i => i.tempId !== tid); updateCartUI(); }
+        function applyPromo() { const code = document.getElementById('promo-input').value.toUpperCase(); discount = (code === "ELITE10") ? 0.10 : 0; updateCartUI(); }
+        async function deleteQuery(id) { await fetch(`${API_BASE}/admin/queries/${id}`, { method: 'DELETE' }); loadAdminData(); }
+        async function sendQuery() { 
+            const btn = document.getElementById('query-btn'); btn.innerText = "SENDING..."; btn.disabled = true;
+            await fetch(`${API_BASE}/contact`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: document.getElementById('q-name').value, email: document.getElementById('q-email').value, message: document.getElementById('q-message').value }) });
+            btn.innerText = "SEND QUERY"; btn.disabled = false; showToast("SENT");
+        }
 
         function toggleCart() { document.getElementById('cart-sidebar').classList.toggle('open'); }
         function selectSize(btn) { btn.parentElement.querySelectorAll('.size-btn').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); }
